@@ -1,0 +1,6 @@
+requests==2.27.1
+dill==0.3.5.1
+importlib-metadata==4.13.0
+celery[redis]==5.2.7
+spacy==3.3.0
+networkx==2.6

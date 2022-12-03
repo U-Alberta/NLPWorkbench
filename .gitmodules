@@ -1,0 +1,9 @@
+[submodule "thirdparty/pure-ner"]
+	path = thirdparty/pure-ner
+	url = git@gitlab.com:UAlberta/nlpwokkbench/pure-ner.git
+[submodule "thirdparty/amrbart"]
+	path = thirdparty/amrbart
+	url = git@gitlab.com:UAlberta/nlpwokkbench/amrbart.git
+[submodule "frontend"]
+	path = frontend
+	url = git@gitlab.com:UAlberta/nlpwokkbench/workbench-frontend.git

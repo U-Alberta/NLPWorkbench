@@ -1,0 +1,121 @@
+version: "3"
+services:
+  api:
+    image: 127.0.0.1:5000/workbench/api
+    build:
+      dockerfile: ./build/Dockerfile.api
+  frontend:
+    image: 127.0.0.1:5000/workbench/frontend
+    build:
+      context: ./frontend
+      dockerfile: ./Dockerfile
+    depends_on:
+      - api
+      - neo4j
+      - kibana
+      - flower
+    ports:
+      - "8085:80"
+  ner:
+    image: 127.0.0.1:5000/workbench/ner
+    build:
+      dockerfile: ./build/Dockerfile.ner 
+    depends_on:
+      - redis
+    deploy:
+      placement:
+        constraints:
+          - node.hostname==caidac
+  linker:
+    image: 127.0.0.1:5000/workbench/linker
+    build:
+      dockerfile: ./build/Dockerfile.linker
+    volumes:
+      - /home/ubuntu/workbench/docker-data/sqlite/embeddings.sqlite3:/app/db/embeddings.sqlite3
+    deploy:
+      placement:
+        constraints:
+          - node.hostname==caidac
+    depends_on:
+      - redis
+  amr:
+    image: 127.0.0.1:5000/workbench/amr
+    build:
+      dockerfile: ./build/Dockerfile.amr
+    depends_on:
+      - redis
+  amr2text:
+    image: 127.0.0.1:5000/workbench/amr2text
+    build:
+      dockerfile: ./build/Dockerfile.amr2text
+    depends_on:
+      - redis
+  background:
+    image: 127.0.0.1:5000/workbench/background
+    build:
+      dockerfile: ./build/Dockerfile.background
+    depends_on:
+      - redis
+  flower:
+    image: mher/flower:latest
+    command: celery "--broker=redis://:UTLhRXzpeF5sa2QjRch5PPl2EJx1H2@redis" "--result-backend=redis://:UTLhRXzpeF5sa2QjRch5PPl2EJx1H2@redis" flower --url_prefix=flower
+    ports:
+      - 5555 # unpublish port
+    depends_on:
+      - redis
+  redis:
+    command: redis-server --save "" --appendonly no --requirepass "UTLhRXzpeF5sa2QjRch5PPl2EJx1H2" --bind 0.0.0.0
+    image: redis:7.0-alpine
+  neo4j:
+    image: 127.0.0.1:5000/workbench/neo4j
+    build:
+      context: ./neo4j
+    deploy:
+      placement:
+        constraints:
+          - node.hostname==caidac
+    ports:
+      - 7474 # unpublish port
+    volumes:
+      - /home/ubuntu/workbench/docker-data/neo4j:/data
+    stop_grace_period: 2m
+    environment:
+      - NEO4J_dbms_connector_bolt_client__auth=NONE
+      - NEO4J_dbms_connector_bolt_listen__address=0.0.0.0:7687
+      - NEO4J_dbms_connector_bolt_advertised__address=newskg.wdmuofa.ca:9201
+      - NEO4J_dbms_connector_bolt_tls__level=OPTIONAL
+      - NEO4J_dbms_ssl_policy_bolt_enabled=true
+  elasticsearch:
+    image: "elasticsearch:8.2.2"
+    deploy:
+      placement:
+        constraints:
+          - node.hostname==caidac
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false # disable SSL
+      - xpack.security.http.ssl.enabled=false # disable SSL
+      - xpack.security.transport.ssl.enabled=false # disable SSL
+      - bootstrap.memory_lock=true # disable swap
+      - logger.level=ERROR
+      #- path.repo=/repo # for restoring from backup
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - /home/ubuntu/workbench/docker-data/elasticsearch:/usr/share/elasticsearch/data
+  kibana:
+    image: "kibana:8.2.2"
+    ports:
+      - 5601 # unpublish port
+    environment:
+      - SERVER_NAME=kibana
+      - SERVER_BASEPATH=/kibana
+      - SERVER_PUBLICBASEURL=https://newskg.wdmuofa.ca/kibana
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=kibana # CHANGE THIS
+      - LOGGING_ROOT_LEVEL=warn
+    depends_on:
+      - elasticsearch

@@ -1,0 +1,35 @@
+name: base
+dependencies:
+- nvidia::cudatoolkit=11.1.1
+- numpy
+- pip
+- python=3.8
+- pytorch::pytorch=1.8.1=py3.8_cuda11.1_cudnn8.0.5_0
+- scipy
+- tqdm
+- scikit-learn
+- gensim
+- pandas
+- tensorboard
+- tensorboardX
+- pip:
+  - h5py-cache
+  - configargparse
+  - sacrebleu
+  - rouge-score
+  - datasets==1.11
+  - transformers==4.8.2
+  - pytorch-lightning==1.5.0
+  - nltk
+  - cached_property
+  - networkx
+  - penman>=1.1.0
+  - pytorch-ignite
+  - regex
+  - smatch
+  - wandb
+  - amrlib
+  - PyYAML>=5.1
+  - lark==1.1.2
+  - dill==0.3.5.1
+  - celery[redis]==5.2.7

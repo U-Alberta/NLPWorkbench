@@ -1,0 +1,10 @@
+FROM python:3.7
+WORKDIR /app
+VOLUME [ "/app/db" ]
+RUN mkdir /app/cache && mkdir /app/vader_log && mkdir /app/runs && mkdir /app/lightning_logs
+COPY requirements-vader.txt .
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install -r requirements-vader.txt
+COPY . .
+ENV PYTHONUNBUFFERED=TRUE
+CMD ["python3", "vader.py"]

@@ -1,0 +1,17 @@
+?amr_tree: var_def | var_ref | literal
+var_def: "(" VAR_NAME "/" VAR_TYPE (attr_or_arg)* ")"
+?attr_or_arg: attr | arg
+arg . 20 : ":" /ARG\d+/ amr_tree
+attr . 10 : ":" /[\w\-\@]+/ amr_tree
+var_ref: VAR_NAME
+literal: STRING | NUMBER | MODE | POLARITY | ANY
+MODE: "-" | "+"
+POLARITY: "imperative" | "expressive"
+VAR_TYPE: /[\w\d\-_]+/
+VAR_NAME: /[a-z]\d+/
+ANY: /[\w\d\-_]+/
+
+%import common.ESCAPED_STRING   -> STRING
+%import common.SIGNED_NUMBER    -> NUMBER
+%import common.WS
+%ignore WS

@@ -1,0 +1,10 @@
+FROM python:3.9.15
+WORKDIR /app
+RUN mkdir /app/data && mkdir /app/src 
+COPY src/ /app/src/
+COPY /data /app/data/
+COPY requirements-snc.txt .
+RUN python3 -m pip install --upgrade pip setuptools wheel
+RUN python3 -m pip install -r requirements-snc.txt
+COPY snc.py .
+CMD ["python3", "snc.py"]

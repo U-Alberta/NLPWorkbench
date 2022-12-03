@@ -1,0 +1,11 @@
+lightning_logs/
+__pycache__/
+ner_log/
+runs/
+cache/
+exported/
+.vscode/
+snc/src/config.py
+tmp/
+*/tmp/
+.env

@@ -1,0 +1,11 @@
+FROM python:3.7
+WORKDIR /app
+EXPOSE 50050
+RUN mkdir /app/cache && mkdir /app/ner_log && mkdir /app/runs && mkdir /app/lightning_logs
+COPY requirements-api.txt .
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install -r requirements-api.txt && \
+    python3 -m spacy download en_core_web_sm
+COPY . .
+ENV PYTHONUNBUFFERED=TRUE
+CMD ["gunicorn", "--workers=33", "--timeout", "1500", "--bind", "0.0.0.0:50050", "wsgi:create_app()", "--log-level", "debug"]

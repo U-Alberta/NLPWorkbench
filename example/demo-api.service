@@ -1,0 +1,13 @@
+[Unit]
+Description=Entity Linking Demo API Server
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=peiran
+WorkingDirectory=/data/demo-api
+ExecStart=/usr/bin/bash -c "PATH=/opt/conda/envs/demo/bin:/usr/local/bin:/usr/bin:/bin:/snap/bin uwsgi --chmod-socket=666 -s /tmp/demo_backend.sock --manage-script-name --mount /api=wsgi:app --processes 16 --master"
+
+[Install]
+WantedBy=multi-user.target

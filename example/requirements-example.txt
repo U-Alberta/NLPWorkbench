@@ -1,0 +1,2 @@
+dill==0.3.5.1
+celery[redis]==5.2.7
