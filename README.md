@@ -6,6 +6,7 @@ nlpworkbench
 - [Add a new NLP tool](#extension)
 - [Move some NLP tools to another machine](#distributed-deployment)
 - [Backup and restore the workbench](#restoring-from-backups)
+- [Understand an API call stack](#api-call-stack)
 
 ## Deployment
 Docker is the preferred way of deployment.
@@ -272,3 +273,21 @@ docker run -it --rm \
 ```
 
 **neo4j image version must match dump version and dbms version!!**
+
+## API Call Stack
+This [diagram](callstack.pdf) shows what's happening behind the scene when an API call is made to run NER on a document.
+
+When a REST API is called, the NGINX reverse proxy (running in `frontend` container) decrypts the HTTPS request, and passes it to the `api` container. Inside the `api` container, `gunicorn` passes the request to one of the Flask server processes. Numbers below correspond to labels in the diagram.
+
+1. `wsgi.py` provides routing for RESTful API calls. Everything under `doc_api.route` is registered with a pre-request hook.
+2. The pre-request hook verifies and loads document from the ES collection. The document is stored in Flask's global object `g` for the lifecycle of the request.
+3. Loading document is handled by `api_impl.py`, which makes a request to Elasticsearch to retrieve the document if the document in a collection, or downloads the article from the URL provided.
+4. An Elasticsearch query is just an HTTP request.
+5. After the document is retrieved, `get_ner` in `api_impl.py` is called. `api_impl.py` provides real implementation of the functions, and caching of results. Functions in `api_impl.py` are wrapped with `@es_cache` decorator which handles caching.
+6. The `es_cache` decorator creates a cache key based on the parameters of the function call, and checks if the result is already cached. If so no real computation is done and the cached result is returned.
+7. If no NER output is cached, we use celery to call the remote function `run_ner` running in `ner` container.
+8. The `run_ner` function prepares the input for the PURE NER model. The open source code from PURE takes json line text files as input and writes to another json line file. `run_ner` prepares the input files, calls the NER model, and parses the outputs. 
+9. `call` function is a wrapper in PURE NER's code base. PURE NER initially can only be called via command line (handled in `__main__`) and this wrapper function pretends inputs are from the command line.
+10. We also have lazy loading helper functions so that models are only loaded once.
+11. Output of PURE NER is automatically stored in Elasticsearch by the `es_cache` decorator.
+12. NER output is formatted to suit the need of the frontend, and responded to the user.
