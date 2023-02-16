@@ -23,6 +23,9 @@ Clone the repositories and build docker images:
 ```bash
 # build images
 docker compose -f docker-compose.dev.yml --profile non-gpu --profile gpu build
+# provide credentials
+export BEARER_TOKEN=AAAAAAAAAAA # Twitter API bearer token
+export ELASTIC_PASSWORD=elastic # Elasticsearch password, default is `elastic`
 # run
 docker compose -f docker-compose.dev.yml --profile non-gpu --profile gpu up
 ```
