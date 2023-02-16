@@ -1,17 +1,26 @@
-FROM continuumio/miniconda3:4.10.3
+FROM continuumio/miniconda3:4.10.3 AS base
 WORKDIR /app
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=private \
     apt-get update && apt-get install -y unzip build-essential && rm -rf /var/lib/apt/lists/* && \
     conda install python=3.7 pytorch==1.11.0 cudatoolkit=11.3 -c pytorch
-RUN mkdir /app/cache && mkdir /app/ner_log && mkdir /app/runs && mkdir /app/lightning_logs && mkdir /app/thirdparty
-COPY requirements-ner.txt .
+RUN mkdir /app/cache && mkdir /app/ner_log && mkdir /app/runs && mkdir /app/lightning_logs && mkdir -p /app/workbench/thirdparty
+COPY requirements/ner.txt requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
     conda run --no-capture-output pip3 install scipy && \
-    conda run --no-capture-output pip3 install -r requirements-ner.txt && \
+    conda run --no-capture-output pip3 install -r requirements.txt && \
     conda run --no-capture-output python3 -m spacy download en_core_web_sm
 RUN --mount=type=cache,target=/root/.cache/huggingface \
     conda run --no-capture-output python3 -c "from transformers import AutoModel, AutoTokenizer; AutoModel.from_pretrained('bert-base-uncased'); AutoTokenizer.from_pretrained('bert-base-uncased')"
-RUN wget https://nlp.cs.princeton.edu/projects/pure/ace05_models/ent-bert-ctx300.zip -O /app/thirdparty/ent-bert-ctx300.zip -nv && \
-    unzip /app/thirdparty/ent-bert-ctx300.zip -d /app/thirdparty/
-COPY . .
-CMD ["conda", "run", "--no-capture-output", "python3", "ner.py"]
+RUN wget https://nlp.cs.princeton.edu/projects/pure/ace05_models/ent-bert-ctx300.zip -O /app/workbench/thirdparty/ent-bert-ctx300.zip -nv && \
+    unzip /app/workbench/thirdparty/ent-bert-ctx300.zip -d /app/workbench/thirdparty/
+COPY workbench/ ./workbench
+
+FROM base AS test
+COPY .coveragerc ./
+RUN --mount=type=cache,target=/root/.cache/pip \ 
+    conda run --no-capture-output pip3 install pytest==7.2 coverage==7.0.5
+COPY tests ./tests
+CMD ["conda", "run", "--no-capture-output", "coverage", "run", "--data-file=cov/.coverage", "--source=workbench/", "--module", "pytest", "tests/test_ner.py"]
+
+FROM base AS prod
+CMD ["conda", "run", "--no-capture-output", "python3", "-m" "workbench.ner"]

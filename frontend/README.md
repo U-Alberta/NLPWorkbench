@@ -1,3 +1,5 @@
+**Archived - code moved to the main repository [https://gitlab.com/UAlberta/nlpwokkbench/workbench-api](https://gitlab.com/UAlberta/nlpwokkbench/workbench-api)**
+
 # newskg-demo-web
 
 Web interface for the news KG pipeline demo.

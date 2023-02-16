@@ -1,10 +1,18 @@
-FROM python:3.7
+FROM python:3.7 AS base
 WORKDIR /app
-VOLUME [ "/app/db" ]
-RUN mkdir /app/cache && mkdir /app/vader_log && mkdir /app/runs && mkdir /app/lightning_logs
-COPY requirements-vader.txt .
+RUN mkdir /app/cache && mkdir /app/vader_log && mkdir /app/lightning_logs
+COPY requirements/vader.txt requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip3 install -r requirements-vader.txt
-COPY . .
+    pip3 install -r requirements.txt
+COPY workbench/ ./workbench
 ENV PYTHONUNBUFFERED=TRUE
-CMD ["python3", "vader.py"]
+
+FROM base as test
+COPY .coveragerc ./
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install pytest==7.2 coverage==7.0.5
+COPY tests ./tests
+CMD ["coverage", "run", "--data-file=cov/.coverage", "--source=workbench/", "--module", "pytest", "tests/test_sentiment.py"]
+
+FROM base as prod
+CMD ["python3", "-m", "workbench.vader"]

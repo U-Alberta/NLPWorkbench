@@ -1,0 +1,8 @@
+elasticsearch==8.5.1
+neo4j==4.4.4
+requests==2.27.1
+tweepy==4.10.0
+celery[redis]==5.2.7
+dill==0.3.5.1
+importlib-metadata==4.13.0
+python-dateutil==2.8.2

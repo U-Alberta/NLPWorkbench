@@ -9,3 +9,4 @@ snc/src/config.py
 tmp/
 */tmp/
 .env
+**/.DS_Store

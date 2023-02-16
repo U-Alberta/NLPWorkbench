@@ -113,6 +113,7 @@ services:
   vader:
     build:
       dockerfile: ./build/Dockerfile.vader
+      target: ${COMPOSE_TARGET:-prod}
     environment:
       - RPC_BROKER=${RPC_BROKER:-"redis://redis"}
       - RPC_BACKEND=${RPC_BACKEND:-"redis://redis"}
@@ -127,7 +128,7 @@ services:
 
   relation_extraction:
     build:
-      context: ./relation_extraction
+      context: ./workbench/relation_extraction
     environment:
       - RPC_BROKER=${RPC_BROKER:-"redis://redis"}
       - RPC_BACKEND=${RPC_BACKEND:-"redis://redis"}
@@ -208,7 +209,7 @@ services:
         source: /home/ubuntu/workbench/docker-data/neo4j-certs # CHANGE THIS
         target: /var/lib/neo4j/certificates
     environment:
-      - NEO4J_dbms_connector_bolt_client__auth=NONE
+      - NEO4J_dbms_connector_bolt_client__auth=OPTIONAL
       - NEO4J_dbms_connector_bolt_listen__address=0.0.0.0:7687
       - NEO4J_dbms_connector_bolt_advertised__address=newskg.wdmuofa.ca:9201
       - NEO4J_dbms_connector_bolt_tls__level=OPTIONAL
@@ -242,8 +243,7 @@ services:
 
   snc:
     build:
-      dockerfile: Dockerfile.snc
-      context: ./snc/
+      dockerfile: ./build/Dockerfile.snc
     profiles:
       - non-gpu
       - debug

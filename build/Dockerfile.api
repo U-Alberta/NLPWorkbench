@@ -2,10 +2,10 @@ FROM python:3.7
 WORKDIR /app
 EXPOSE 50050
 RUN mkdir /app/cache && mkdir /app/ner_log && mkdir /app/runs && mkdir /app/lightning_logs
-COPY requirements-api.txt .
+COPY requirements/api.txt requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip3 install -r requirements-api.txt && \
+    pip3 install -r requirements.txt && \
     python3 -m spacy download en_core_web_sm
-COPY . .
+COPY workbench/ ./workbench
 ENV PYTHONUNBUFFERED=TRUE
-CMD ["gunicorn", "--workers=33", "--timeout", "1500", "--bind", "0.0.0.0:50050", "wsgi:create_app()", "--log-level", "debug"]
+CMD ["gunicorn", "--workers=1", "--timeout", "1500", "--bind", "0.0.0.0:50050", "workbench.wsgi:create_app()", "--log-level", "debug"]

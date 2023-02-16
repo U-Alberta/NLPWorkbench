@@ -1,0 +1,195 @@
+version: "3"
+name: "nlp-workbench-dev"
+services:
+  api:
+    ports:
+      - "50050:50050"
+    build:
+      dockerfile: ./build/Dockerfile.api
+    environment:
+      - RPC_BROKER=${RPC_BROKER:-redis://redis}
+      - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
+    profiles:
+      - non-gpu
+      - debug
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ./Dockerfile
+    depends_on:
+      - api
+      - neo4j
+      - kibana
+      - flower
+    ports:
+      - "8085:80"
+    profiles:
+      - non-gpu
+      - debug
+
+  ner:
+    build:
+      dockerfile: ./build/Dockerfile.ner 
+      target: ${COMPOSE_TARGET:-prod}
+    environment:
+      - RPC_BROKER=${RPC_BROKER:-redis://redis}
+      - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
+    profiles:
+      - gpu
+
+  linker:
+    build:
+      dockerfile: ./build/Dockerfile.linker
+    depends_on:
+      - redis
+    environment:
+      - RPC_BROKER=${RPC_BROKER:-redis://redis}
+      - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
+    profiles:
+      - non-gpu
+
+  amr:
+    build:
+      dockerfile: ./build/Dockerfile.amr
+    environment:
+      - RPC_BROKER=${RPC_BROKER:-redis://redis}
+      - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
+    profiles:
+      - gpu
+
+  amr2text:
+    build:
+      dockerfile: ./build/Dockerfile.amr2text
+    environment:
+      - RPC_BROKER=${RPC_BROKER:-redis://redis}
+      - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
+    profiles:
+      - gpu
+
+  vader:
+    build:
+      dockerfile: ./build/Dockerfile.vader
+      target: ${COMPOSE_TARGET:-prod}
+    environment:
+      - RPC_BROKER=${RPC_BROKER:-redis://redis}
+      - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
+    profiles:
+      - non-gpu
+
+  relation_extraction:
+    build:
+      dockerfile: ./build/Dockerfile.rel
+    environment:
+      - RPC_BROKER=${RPC_BROKER:-redis://redis}
+      - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
+    profiles:
+      - non-gpu
+
+  background:
+    build:
+      dockerfile: ./build/Dockerfile.background
+    depends_on:
+      - redis
+    environment:
+      - RPC_BROKER=${RPC_BROKER:-redis://redis}
+      - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
+    profiles:
+      - non-gpu
+
+  flower:
+    image: mher/flower:latest
+    command: celery --broker=${RPC_BROKER:-redis://redis} --result-backend=redis://redis${RPC_BROKER:-redis://redis} flower --url_prefix=flower
+    ports:
+      - 5555 # unpublish port
+    depends_on:
+      - redis
+    profiles:
+      - non-gpu
+      - debug
+
+  redis:
+    image: redis:7.0-alpine
+    command: redis-server --save "" --appendonly no ${REDIS_AUTH}
+    ports:
+      - 8081:6379
+    profiles:
+      - non-gpu
+      - debug
+
+  neo4j:
+    build:
+      context: ./neo4j
+    ports:
+      - 7687
+      - 7474
+    stop_grace_period: 2m
+    profiles:
+      - non-gpu
+      - debug
+
+  snc-neo4j:
+    build:
+      context: ./neo4j
+    environment:
+      - NEO4J_AUTH=neo4j/snc123
+      - NEO4J_dbms_security_procedures_unrestricted=gds.*,apoc.*
+      - NEO4J_dbms_security_procedures_allowlist=gds.*,apoc.*
+      - NEO4JLABS_PLUGINS=["apoc", "graph-data-science"]
+    profiles:
+      - non-gpu
+      - debug
+    stop_grace_period: 2m
+
+  snc:
+    build:
+      dockerfile: ./build/Dockerfile.snc
+      target: ${COMPOSE_TARGET:-prod}
+    profiles:
+      - non-gpu
+      - debug
+    environment:
+      - RPC_BROKER=${RPC_BROKER:-redis://redis}
+      - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
+      - BEARER_TOKEN=${BEARER_TOKEN}
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+    depends_on:
+      - snc-neo4j
+      - redis
+      - elasticsearch
+
+  elasticsearch:
+    image: "elasticsearch:8.2.2"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false # disable SSL
+      - xpack.security.http.ssl.enabled=false # disable SSL
+      - xpack.security.transport.ssl.enabled=false # disable SSL
+      - bootstrap.memory_lock=true # disable swap
+      - logger.level=ERROR
+      #- path.repo=/repo # for restoring from backup
+    mem_limit: "16g" # TODO: increase later
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    profiles:
+      - non-gpu
+      - debug
+
+  kibana:
+    image: "kibana:8.2.2"
+    ports:
+      - 5601 # unpublish port
+    environment:
+      - SERVER_NAME=kibana
+      - SERVER_BASEPATH=/kibana
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=kibana # CHANGE THIS
+      - LOGGING_ROOT_LEVEL=warn
+    depends_on:
+      - elasticsearch
+    profiles:
+      - non-gpu
+      - debug

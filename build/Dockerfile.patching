@@ -1,0 +1,5 @@
+# environment for running patch_compose.py
+FROM python:3.9-alpine
+RUN pip install pyyaml
+ADD patch_compose.py /patch_compose.py
+ENTRYPOINT [ "python3", "/patch_compose.py" ]

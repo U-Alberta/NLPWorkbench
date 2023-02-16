@@ -2,12 +2,12 @@ FROM python:3.7
 WORKDIR /app
 VOLUME [ "/app/db" ]
 RUN mkdir /app/cache && mkdir /app/ner_log && mkdir /app/runs && mkdir /app/lightning_logs
-COPY requirements-linker.txt .
+COPY requirements/linker.txt requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip3 install -r requirements-linker.txt && \
+    pip3 install -r requirements.txt && \
     python3 -m spacy download en_core_web_sm
 # cache sentence transformer model
 RUN python3 -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('multi-qa-mpnet-base-dot-v1')"
-COPY . .
+COPY workbench/ ./workbench
 ENV PYTHONUNBUFFERED=TRUE
-CMD ["python3", "linker.py"]
+CMD ["python3", "-m", "workbench.linker"]

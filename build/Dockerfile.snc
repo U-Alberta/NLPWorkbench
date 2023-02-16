@@ -1,10 +1,18 @@
-FROM python:3.9.15
+FROM python:3.9 AS base
 WORKDIR /app
-RUN mkdir /app/data && mkdir /app/src 
-COPY src/ /app/src/
-COPY /data /app/data/
-COPY requirements-snc.txt .
-RUN python3 -m pip install --upgrade pip setuptools wheel
-RUN python3 -m pip install -r requirements-snc.txt
-COPY snc.py .
-CMD ["python3", "snc.py"]
+RUN mkdir /app/data
+COPY workbench/snc/requirements.txt .
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python3 -m pip install --upgrade pip setuptools wheel && \
+    python3 -m pip install -r requirements.txt
+COPY workbench/ ./workbench
+
+FROM base as test
+COPY .coveragerc ./
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install pytest==7.2 coverage==7.0.5
+COPY tests ./tests
+CMD ["coverage", "run", "--data-file=cov/.coverage", "--source=workbench/", "--module", "pytest", "tests/test_snc.py"]
+
+FROM base AS prod
+CMD ["python3", "-m", "workbench.snc"]

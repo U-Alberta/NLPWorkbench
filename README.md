@@ -1,120 +1,39 @@
 nlpworkbench
 ====
 
+## What-Is
+- [The purpose of this project](#about)
+- [The layout of this project](#layout)
+- [The call stack of an API call](#api-call-stack)
 ## How-To
 - [Deploy the whole thing on a single machine](#deployment)
 - [Add a new NLP tool](#extension)
+- [Write and run tests](#testing)
 - [Move some NLP tools to another machine](#distributed-deployment)
 - [Backup and restore the workbench](#restoring-from-backups)
-- [Understand an API call stack](#api-call-stack)
+
+## About
+Please refer to the paper.
 
 ## Deployment
 Docker is the preferred way of deployment.
-### Docker
 Requires a newer docker and docker compose plugin. Tested with docker v20.10.16.
-
-On the host machine, prepare the folders for persisting data
-```bash
-mkdir /path/to/neo4j/data  # folder for storing neo4j data
-mkdir /path/to/es/data  # folder for storing elasticsearch data
-mkdir /path/to/sqlite/data  # folder for storing embeddings
-touch /path/to/sqlite/data/embeddings.sqlite3 # database file for storing embeddings
-
-mkdir -p /path/to/neo4j/certs/bolt/ # folder for storing neo4j certificates
-cp /path/to/privkey.pem /path/to/neo4j/certs/bolt/private.key
-cp /path/to/fullchain.pem /path/to/neo4j/certs/bolt/public.crt
-cp /path/to/fullchain.pem /path/to/neo4j/certs/bolt/trusted/public.crt
-
-# change permission to writable
-chmod a+rwx /path/to/neo4j/data
-chmod a+rwx /path/to/es/data
-chmod a+rwx /path/to/sqlite/data/embeddings.sqlite3
-
-chown -R 7474:7474 /path/to/neo4j/certs/
-# change permissions of neo4j certificates following https://neo4j.com/docs/operations-manual/current/security/ssl-framework/#ssl-bolt-config
-# just for example,
-chmod 0755 /path/to/neo4j/certs/bolt/private.key
-```
-
-Modify `docker-compose.yml` file to mount the volumes to the correct locations (the folders you created above). Search for `volumes:` or `# CHANGE THIS` in `docker-compose.yml` and replace `source: ` with the correct path.
-
-Follow this [document](https://www.elastic.co/guide/en/kibana/current/docker.html) to set elasticsearch passwords and generate enrollment tokens for kibana.
-```bash
-# set password for user elastic
-docker exec -it nlp-workbench-elasticsearch-1 /usr/share/elasticsearch/bin/elasticsearch-reset-password -u elastic -i
-# set password for user kibana_system
-docker exec -it nlp-workbench-elasticsearch-1 /usr/share/elasticsearch/bin/elasticsearch-reset-password -u kibana_system -i
-# generate an enrollment token for kibana
-docker exec -it nlp-workbench-elasticsearch-1 /usr/share/elasticsearch/bin/elasticsearch-create-enrollment-token -s kibana
-```
-Open kibana in a browser and use the enrollment token to set up kibana.
-
-
-Modify the port mapping in `docker-compose.yml` file under `services -> frontend -> ports` to change the exposed port. The current one is 8080, which means `http://localhost:8080` is the url for the workbench.
 
 Clone the repositories and build docker images:
 ```bash
-# clone thirdparty nlp tools and frontend
-git submodule init
-git submodule update
 # build images
-docker compose --profile non-gpu --profile gpu build
+docker compose -f docker-compose.dev.yml --profile non-gpu --profile gpu build
 # run
-docker compose --profile non-gpu --profile gpu up
+docker compose -f docker-compose.dev.yml --profile non-gpu --profile gpu up
 ```
 
-Finally, run some quick tests. The entity linker will not work because the knowledge graph is empty. "Feelin' Lucky" also will not work because the article collection in ES is empty. But entity recognition, semantic parsing, and relation extraction should be working fine.
+The workbench should be up and running on `http://localhost:8085`. Paste a news link in the input box and click "Load News" to run some tests.
 
-Paste a news link in the input box and click "Load News" to run some tests.
+Without further configurations some parts will not be working: Kibana needs to be paired with Elasticsearch. The entity linker will not work because the knowledge graph is empty. "Feelin' Lucky" also will not work because the article collection in ES is empty. But entity recognition, semantic parsing, and relation extraction should be working fine.
 
-### Manual deployment
-You shouldn't need to deploy things manually. The docker service does all the steps here.
-
-#### Run a development server
-Create a new virtual environment and run `pip3 install -r requirements-api.txt`
-
-Use `flask run --host=127.0.0.1 --port=3000` to start a development server.
-
-#### Deploy API server for production
-1. Install nginx, and configure SSL certificates (probably with let's encrypt).
-2. Put `confs/nginx-conf` in `/etc/nginx/sites-enabled/`. You can do this by `ln -s confs/nginx-conf /etc/nginx/sites-enabled/nlpworkbench-backend`
-3. Run `sudo nginx -s reload` to load the site configuration.
-4. Put `confs/demo-api.service` in `/etc/systemd/system/`. You can do this by `ln -s confs/demo-api.service /etc/systemd/system/demo-api.service`.
-5. Run `sudo systemd daemon-reload` to load the service configuration.
-6. Run `sudo systemd start demo-api` to start the backend.
-
-#### Setting up components
-##### Article DB
-Articles are stored and indexed in Elasticsearch. After setting up Elasticsearch, modify config.py and point `es_url` and `es_auth` to the es server, and change `es_article_collection` to the collection name.
-
-##### Named entity recognition
-Download the pre-trained model from [https://nlp.cs.princeton.edu/projects/pure/ace05_models/ent-bert-ctx300.zip](https://nlp.cs.princeton.edu/projects/pure/ace05_models/ent-bert-ctx300.zip) and decompress it.
-
-Clone the NER system from `git@gitlab.com:UAlberta/nlpwokkbench/pure-ner.git`.
-
-In `config.py`, point `ner_script` to `run_ner.py` in the PURE NER repository, and `ner_model` to the model folder.
-
-##### Entity linking
-Entities are indexed in elasticsearch by their aliases. Point `es_entity_collection` to the entity collection in ES.
-
-After generating candidates from a ES query, our system rescores all candidates by comparing sentence embeddings. For this we'll need pre-computed embeddings for all the entities (stored in an sqlite db, [download here](https://drive.google.com/file/d/17cvpeiwifVMBJ-Sidqq_f-pskvyyAlhv/view?usp=sharing)). Change `embeddings_db` in `config.py` to the sqlite file.
-
-Neo4j stores entity attributes and descriptions. Set `neo4j_url` and `neo4j_auth` properly.
-
-##### Semantic parsing
-Clone `git@gitlab.com:UAlberta/nlpwokkbench/amrbart.git`
-
-Download the pre-trained model by running
-```bash
-# apt install git-lfs
-git lfs install
-git clone https://huggingface.co/xfbai/AMRBART-large-finetuned-AMR3.0-AMR2Text
-```
-
-Point `amr_script` to `inference_amr.py` in the AMRBART repository, and set `amr_model` properly.
-
+By default docker creates temporary volumes to store data. During production we want to persist things, and this is done by binding locations on the host to the containers. We also need to configure Neo4j and Kibana for pair with the servers. Details on deploying in production mode are documented [here](docs/deploy-production.md).
 ## Extension
-![Architecture](arch.svg)
+![Architecture](docs/arch.svg)
 The architecture of the nlpworkbench is shown in the above figure. Each NLP tool / model runs in its independent container, and communicates with the API server using Celery, or alternatively any protocol you like.
 
 The goal of using Celery is that you can move any Python function to any physical machine and 
@@ -275,7 +194,7 @@ docker run -it --rm \
 **neo4j image version must match dump version and dbms version!!**
 
 ## API Call Stack
-This [diagram](callstack.pdf) shows what's happening behind the scene when an API call is made to run NER on a document.
+This [diagram](docs/callstack.pdf) shows what's happening behind the scene when an API call is made to run NER on a document.
 
 When a REST API is called, the NGINX reverse proxy (running in `frontend` container) decrypts the HTTPS request, and passes it to the `api` container. Inside the `api` container, `gunicorn` passes the request to one of the Flask server processes. Numbers below correspond to labels in the diagram.
 
@@ -291,3 +210,116 @@ When a REST API is called, the NGINX reverse proxy (running in `frontend` contai
 10. We also have lazy loading helper functions so that models are only loaded once.
 11. Output of PURE NER is automatically stored in Elasticsearch by the `es_cache` decorator.
 12. NER output is formatted to suit the need of the frontend, and responded to the user.
+
+## Layout
+```
+build/
+ |
+ |-- Dockerfile.api
+ |-- Dockerfile.service
+frontend/
+requirements/
+ |
+ |-- api.txt
+ |-- service.txt
+workbench/
+ |
+ |-- __init__.py
+ |-- rpc.py
+ |-- snc/
+      |
+      |-- __init__.py
+ |-- thirdparty/
+      | -- amrbart/
+      | -- pure-ner/
+docker-compose.yml
+```
+
+`build/` folder contains all `Dockerfile`s and `requirements/` folder contains `requirements.txt` for each micro-service.
+
+`workbench/` contains all Python code. The folder and all of its subfolders (except `thirdparty/`) are [Python packages](https://docs.python.org/3/tutorial/modules.html#packages). A `__init__.py` file must be present in every subfolder. [Relative imports](https://docs.python.org/3/tutorial/modules.html#intra-package-references) (`from . import config`, or `from ..rpc import create_celery`) are the preferred way to reference modules within the `workbench` package.
+
+## Testing
+We are moving towards test-driven development. The infrastructure for unit tests are available.te
+
+### Writing unit tests
+We use the [pytest](https://docs.pytest.org/en/7.2.x/) framework to test Python code. It is a very light-weight framework: to write tests one would create a file `tests/test_some_module.py` containing functions with name `test_some_feature` and writing `assert` statements.
+
+Here's a snippet from `tests/test_sentiment.py` that tests the VADER sentiment analyzer:
+```python
+from workbench import vader
+
+def test_classify_positive_sents():
+    positive_sents = [
+        "I love this product.",
+        "Fantastic!",
+        "I am so happy.",
+        "This is a great movie."
+    ]
+    for sent in positive_sents:
+        output = vader.run_vader(sent)
+        assert output["polarity_compound"] > 0.3
+```
+
+Running `python3 -m pytest tests/test_sentiments.py` will provide a report for this set of unit tests like:
+```
+==================== test session starts ==================== 
+platform linux -- Python 3.9.12, pytest-7.1.1, pluggy-1.0.0
+rootdir: /data/local/workbench-dev, configfile: pyproject.toml
+plugins: anyio-3.5.0
+collected 3 items                                                                            
+
+tests/test_sentiment.py ...                                                            [100%]
+============== 3 passed, 3 warnings in 0.37s ==============
+```
+
+In the real world we don't directly run code, and instead we use Docker. Unit test is added into a docker image separate from the image used to run the service, by using [multi-stage build](https://docs.docker.com/language/java/run-tests/). Still using VADER as the example, the Dockerfile after adding tests becomes:
+```Dockerfile
+FROM python:3.7 AS base
+WORKDIR /app
+RUN mkdir /app/cache && mkdir /app/vader_log && mkdir /app/lightning_logs
+COPY requirements/vader.txt requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install -r requirements.txt
+COPY workbench/ ./workbench
+ENV PYTHONUNBUFFERED=TRUE
+
+FROM base as prod
+CMD ["python3", "-m", "workbench.vader"]
+
+FROM base as test
+COPY .coveragerc ./
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install pytest==7.2 coverage==7.0.5
+COPY tests ./tests
+CMD ["coverage", "run", "--data-file=cov/.coverage", "--source=workbench/", "--module", "pytest", "tests/test_sentiment.py"]
+```
+The `base` image contains all the source code and dependencies to run VADER. The `prod` image starts the process that serves VADER. The `test` image is used to run testing, where tests are added and test frameworks are installed. Running a container with the `test` image will invoke the tests.
+
+After adding multi-stage build, `docker-compose.dev.yml` needs to be changed to specify the default build stage as `prod`:
+```yaml
+  vader:
+    build:
+      dockerfile: ./build/Dockerfile.vader
+      target: ${COMPOSE_TARGET:-prod}
+```
+
+### Run tests locally
+`run-test.sh` provides the scripts to run tests on your local machine using Docker. To test VADER:
+```bash
+./run-test.sh build vader # build the `test` stage image for vader
+./run-test.sh test vader # run a container with the `test` image
+# repeat the process for other services. 
+# `vader` can be replaced with other services defined in `docker-compose.dev.yml`
+./run-test.sh coverage # combine coverage info from all tests and print coverage report
+```
+
+### Automated testing
+Once your commits are pushed to GitLab, a pipeline is triggered to automatically run tests. The pipeline badge indicates whether tests are passed, and the coverage badge shows the line coverage percentage.
+
+![pipeline](https://gitlab.com/UAlberta/nlpwokkbench/workbench-api/badges/dev/pipeline.svg)
+![coverage](https://gitlab.com/UAlberta/nlpwokkbench/workbench-api/badges/dev/coverage.svg)
+
+The tests triggered by the push are defined in `.gitlab-ci.yml`. When adding new tests, a `build-something` job and a `test-something` job should be added following the structure of existing jobs in the file.
+
+The test jobs will be executed by a local runner on one of our own machines (rather than on a shared runner provided by GitLab). The local GitLab Runner is installed on our machines as a Docker container, following [the official tutorial](https://docs.gitlab.com/runner/install/docker.html). Our local runner is then [registered with the repository](https://docs.gitlab.com/runner/register/index.html). The default image for the docker executors is `docker:20.10.16`. We are using [Docker socket binding](https://docs.gitlab.com/ee/ci/docker/using_docker_build.html#use-docker-socket-binding) so that docker images / containers created within docker containers will be running **on the host system**, instead of becoming nested containers. This is beneficial for caching and reusing layers.
