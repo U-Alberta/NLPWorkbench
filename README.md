@@ -13,7 +13,17 @@ nlpworkbench
 - [Backup and restore the workbench](#restoring-from-backups)
 
 ## About
-Please refer to the paper.
+Please refer to this paper:
+```bibtex
+@misc{yao2023nlp,
+      title={NLP Workbench: Efficient and Extensible Integration of State-of-the-art Text Mining Tools}, 
+      author={Peiran Yao and Matej Kosmajac and Abeer Waheed and Kostyantyn Guzhva and Natalie Hervieux and Denilson Barbosa},
+      year={2023},
+      eprint={2303.01410},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL}
+}
+```
 
 ## Deployment
 Docker is the preferred way of deployment.
