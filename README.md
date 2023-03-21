@@ -15,7 +15,7 @@ nlpworkbench
 ## About
 Please refer to this paper:
 ```bibtex
-@misc{yao2023nlp,
+@misc{yao2023nlpworkbench,
       title={NLP Workbench: Efficient and Extensible Integration of State-of-the-art Text Mining Tools}, 
       author={Peiran Yao and Matej Kosmajac and Abeer Waheed and Kostyantyn Guzhva and Natalie Hervieux and Denilson Barbosa},
       year={2023},
