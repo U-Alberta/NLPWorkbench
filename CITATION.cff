@@ -1,0 +1,40 @@
+cff-version: 1.2.0
+title: "NLP Workbench: Efficient and Extensible Integration of State-of-the-art Text Mining Tools"
+authors:
+  - family-names: Yao
+    given-names: Peiran
+  - family-names: Kosmajac
+    given-names: Matej
+  - family-names: Waheed
+    given-names: Abeer
+  - family-names: Guzhva
+    given-names: Kostyantyn
+  - family-names: Hervieux
+    given-names: Natalie
+  - family-names: Barbosa
+    given-names: Denilson
+preferred-citation:
+  title: "NLP Workbench: Efficient and Extensible Integration of State-of-the-art Text Mining Tools"
+  authors:
+    - family-names: Yao
+      given-names: Peiran
+    - family-names: Kosmajac
+      given-names: Matej
+    - family-names: Waheed
+      given-names: Abeer
+    - family-names: Guzhva
+      given-names: Kostyantyn
+    - family-names: Hervieux
+      given-names: Natalie
+    - family-names: Barbosa
+      given-names: Denilson
+  year: 2023
+  month: 5
+  type: conference-paper
+  collection-type: proceedings
+  collection-title: "Proceedings of the 17th Conference of the European Chapter of the Association for Computational Linguistics: System Demonstrations"
+  location: Abu Dhabi, United Arab Emirates
+  publisher:
+    name: "Dubrovnik, Croatia"
+  url: "https://aclanthology.org/2023.eacl-demo.3/"
+  pages: "18-26"

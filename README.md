@@ -1,6 +1,8 @@
 nlpworkbench
 ====
 
+**May 8: Our live demo (newskg.wdmuofa.ca) is currently unavailable. We will update when this gets resolved.**
+
 ## What-Is
 - [The purpose of this project](#about)
 - [The layout of this project](#layout)
@@ -11,9 +13,13 @@ nlpworkbench
 - [Write and run tests](#testing)
 - [Move some NLP tools to another machine](#distributed-deployment)
 - [Backup and restore the workbench](#restoring-from-backups)
+- [Cite this project](#cite)
 
 ## About
-Please refer to the [paper](https://gitlab.com/UAlberta/nlpwokkbench/paper).
+Please refer to our [paper](https://aclanthology.org/2023.eacl-demo.3/), [poster](docs/poster.pdf), [slides](docs/slides.pdf) or [video](https://vimeo.com/801006908).
+
+### Changelog
+* May 8: We revamped the admin portal (`/admin`) to support collection creation, browsing, deletion and population. Documents can be imported into a collection from Bing search.
 
 ## Deployment
 Docker is the preferred way of deployment.
@@ -330,3 +336,24 @@ Once your commits are pushed to GitLab, a pipeline is triggered to automatically
 The tests triggered by the push are defined in `.gitlab-ci.yml`. When adding new tests, a `build-something` job and a `test-something` job should be added following the structure of existing jobs in the file.
 
 The test jobs will be executed by a local runner on one of our own machines (rather than on a shared runner provided by GitLab). The local GitLab Runner is installed on our machines as a Docker container, following [the official tutorial](https://docs.gitlab.com/runner/install/docker.html). Our local runner is then [registered with the repository](https://docs.gitlab.com/runner/register/index.html). The default image for the docker executors is `docker:20.10.16`. We are using [Docker socket binding](https://docs.gitlab.com/ee/ci/docker/using_docker_build.html#use-docker-socket-binding) so that docker images / containers created within docker containers will be running **on the host system**, instead of becoming nested containers. This is beneficial for caching and reusing layers.
+
+### Cite
+Please cite the project as:
+```bibtex
+@inproceedings{yao-etal-2023-nlp,
+    title = "{NLP} Workbench: Efficient and Extensible Integration of State-of-the-art Text Mining Tools",
+    author = "Yao, Peiran  and
+      Kosmajac, Matej  and
+      Waheed, Abeer  and
+      Guzhva, Kostyantyn  and
+      Hervieux, Natalie  and
+      Barbosa, Denilson",
+    booktitle = "Proceedings of the 17th Conference of the European Chapter of the Association for Computational Linguistics: System Demonstrations",
+    month = may,
+    year = "2023",
+    address = "Dubrovnik, Croatia",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2023.eacl-demo.3",
+    pages = "18--26",
+}
+```
