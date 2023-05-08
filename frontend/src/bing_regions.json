@@ -1,0 +1,192 @@
+[
+  {
+    "region": "Canada",
+    "lang": "English",
+    "code": "en-CA"
+  },
+  {
+    "region": "United States",
+    "lang": "English",
+    "code": "en-US"
+  },
+  {
+    "region": "Argentina",
+    "lang": "Spanish",
+    "code": "es-AR"
+  },
+  {
+    "region": "Australia",
+    "lang": "English",
+    "code": "en-AU"
+  },
+  {
+    "region": "Austria",
+    "lang": "German",
+    "code": "de-AT"
+  },
+  {
+    "region": "Belgium",
+    "lang": "Dutch",
+    "code": "nl-BE"
+  },
+  {
+    "region": "Belgium",
+    "lang": "French",
+    "code": "fr-BE"
+  },
+  {
+    "region": "Brazil",
+    "lang": "Portuguese",
+    "code": "pt-BR"
+  },
+  {
+    "region": "Canada",
+    "lang": "French",
+    "code": "fr-CA"
+  },
+  {
+    "region": "Chile",
+    "lang": "Spanish",
+    "code": "es-CL"
+  },
+  {
+    "region": "Denmark",
+    "lang": "Danish",
+    "code": "da-DK"
+  },
+  {
+    "region": "Finland",
+    "lang": "Finnish",
+    "code": "fi-FI"
+  },
+  {
+    "region": "France",
+    "lang": "French",
+    "code": "fr-FR"
+  },
+  {
+    "region": "Germany",
+    "lang": "German",
+    "code": "de-DE"
+  },
+  {
+    "region": "Hong Kong SAR",
+    "lang": "Traditional Chinese",
+    "code": "zh-HK"
+  },
+  {
+    "region": "India",
+    "lang": "English",
+    "code": "en-IN"
+  },
+  {
+    "region": "Indonesia",
+    "lang": "English",
+    "code": "en-ID"
+  },
+  {
+    "region": "Italy",
+    "lang": "Italian",
+    "code": "it-IT"
+  },
+  {
+    "region": "Japan",
+    "lang": "Japanese",
+    "code": "ja-JP"
+  },
+  {
+    "region": "Korea",
+    "lang": "Korean",
+    "code": "ko-KR"
+  },
+  {
+    "region": "Malaysia",
+    "lang": "English",
+    "code": "en-MY"
+  },
+  {
+    "region": "Mexico",
+    "lang": "Spanish",
+    "code": "es-MX"
+  },
+  {
+    "region": "Netherlands",
+    "lang": "Dutch",
+    "code": "nl-NL"
+  },
+  {
+    "region": "New Zealand",
+    "lang": "English",
+    "code": "en-NZ"
+  },
+  {
+    "region": "Norway",
+    "lang": "Norwegian",
+    "code": "no-NO"
+  },
+  {
+    "region": "People's republic of China",
+    "lang": "Chinese",
+    "code": "zh-CN"
+  },
+  {
+    "region": "Poland",
+    "lang": "Polish",
+    "code": "pl-PL"
+  },
+  {
+    "region": "Republic of the Philippines",
+    "lang": "English",
+    "code": "en-PH"
+  },
+  {
+    "region": "Russia",
+    "lang": "Russian",
+    "code": "ru-RU"
+  },
+  {
+    "region": "South Africa",
+    "lang": "English",
+    "code": "en-ZA"
+  },
+  {
+    "region": "Spain",
+    "lang": "Spanish",
+    "code": "es-ES"
+  },
+  {
+    "region": "Sweden",
+    "lang": "Swedish",
+    "code": "sv-SE"
+  },
+  {
+    "region": "Switzerland",
+    "lang": "French",
+    "code": "fr-CH"
+  },
+  {
+    "region": "Switzerland",
+    "lang": "German",
+    "code": "de-CH"
+  },
+  {
+    "region": "Taiwan",
+    "lang": "Traditional Chinese",
+    "code": "zh-TW"
+  },
+  {
+    "region": "Turkey",
+    "lang": "Turkish",
+    "code": "tr-TR"
+  },
+  {
+    "region": "United Kingdom",
+    "lang": "English",
+    "code": "en-GB"
+  },
+  {
+    "region": "United States",
+    "lang": "Spanish",
+    "code": "es-US"
+  }
+]

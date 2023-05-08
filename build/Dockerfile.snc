@@ -12,7 +12,7 @@ COPY .coveragerc ./
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip3 install pytest==7.2 coverage==7.0.5
 COPY tests ./tests
-CMD ["coverage", "run", "--data-file=cov/.coverage", "--source=workbench/", "--module", "pytest", "tests/test_snc.py"]
+CMD ["coverage", "run", "--data-file=cov/.coverage", "--source=workbench/", "--module", "pytest", "-s", "tests/test_snc.py"]
 
 FROM base AS prod
 CMD ["python3", "-m", "workbench.snc"]

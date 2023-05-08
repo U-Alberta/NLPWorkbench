@@ -86,9 +86,10 @@ def es_writeback(doc_id, key, value, subkey=None):
         es_query = {"doc": {key: {subkey: value}}}
     else:
         es_query = {"doc": {key: value}}
+    # FIXME: doesn't seem safe
     r = es_request(
         "POST",
-        f"/{Config.es_article_collection}/_update/{doc_id}?refresh=true",
+        f"/{g.collection}/_update/{doc_id}?refresh=true",
         json=es_query,
     ).json()
     if r.get("result") not in ("updated", "noop"):

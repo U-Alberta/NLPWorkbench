@@ -16,6 +16,8 @@ def build_hashtag_collection(neo_connection: NeoConnection, tweepy_client: Clien
         query = "#{}".format(hashtags)          # Single hashtag
     query += 'lang:en -is:retweet' 
 
+    imported_docs = 0
+
     for tweets in Paginator(
         tweepy_client.search_all_tweets,
         query=query,
@@ -25,6 +27,7 @@ def build_hashtag_collection(neo_connection: NeoConnection, tweepy_client: Clien
     ):
         if tweets.data:
             for tweet in tweets.data:
+                # TODO: Need to separate this neo4j method
                 create_tweet(neo_connection, tweet, relations, es_index_name)
 
                 # Format data for ES ingestion
@@ -44,11 +47,16 @@ def build_hashtag_collection(neo_connection: NeoConnection, tweepy_client: Clien
                     index_name=es_index_name, 
                     doc_id=doc['id'], 
                     doc_data=doc
-                ) 
+                )
+                imported_docs += 1
+
+    return imported_docs
 
 def build_tweet_collection(neo_connection: NeoConnection, tweepy_client: Client, es_client: Elasticsearch, tweet_ids, start_date, relations, es_index_name):
     all_usernames = []
     neo_session = neo_connection.get_session()
+
+    imported_docs = 0
 
     for tweet_id in tweet_ids:
         tweet = tweepy_client.get_tweet(
@@ -62,7 +70,7 @@ def build_tweet_collection(neo_connection: NeoConnection, tweepy_client: Client,
         author_username = [author.data['username']]
         if author_username[0] not in all_usernames:
             all_usernames.append(author_username[0])
-            build_username_collection(neo_connection, tweepy_client, es_client, author_username, start_date, relations, es_index_name)
+            user_imports = build_username_collection(neo_connection, tweepy_client, es_client, author_username, start_date, relations, es_index_name)
 
         if tweet_exists(neo_connection, tweet_id):
             update_tweet(neo_session, tweet.data)
@@ -89,8 +97,11 @@ def build_tweet_collection(neo_connection: NeoConnection, tweepy_client: Client,
             doc_id=doc['id'], 
             doc_data=doc
         ) 
+        imported_docs += 1
+    return imported_docs
 
 def build_username_collection(neo_connection: NeoConnection, tweepy_client: Client, es_client: Elasticsearch, usernames, start_date, relations, es_index_name):
+    imported_docs = 1
     for username in usernames:
         user = tweepy_client.get_user(
             username=username,
@@ -105,6 +116,9 @@ def build_username_collection(neo_connection: NeoConnection, tweepy_client: Clie
         if user.data is None:
             continue
 
+        print("Userdata: ", user.data)
+
+        # TODO: Need to separate neo4j methods
         if user_exists(neo_connection, user.data['id']):
             update_user(neo_connection.get_session(), user.data)
         else:
@@ -130,4 +144,7 @@ def build_username_collection(neo_connection: NeoConnection, tweepy_client: Clie
             index_name=es_index_name, 
             doc_id=doc['id'], 
             doc_data=doc
-        ) 
+        )
+        imported_docs += 1
+    
+    return imported_docs

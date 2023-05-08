@@ -1,5 +1,6 @@
 FROM python:3.7
 WORKDIR /app
+ENV RPC_CALLER=1
 RUN mkdir /app/cache && mkdir /app/ner_log && mkdir /app/runs && mkdir /app/lightning_logs
 COPY requirements/background.txt requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \

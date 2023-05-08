@@ -13,29 +13,23 @@ nlpworkbench
 - [Backup and restore the workbench](#restoring-from-backups)
 
 ## About
-Please refer to this paper:
-```bibtex
-@misc{yao2023nlpworkbench,
-      title={NLP Workbench: Efficient and Extensible Integration of State-of-the-art Text Mining Tools}, 
-      author={Peiran Yao and Matej Kosmajac and Abeer Waheed and Kostyantyn Guzhva and Natalie Hervieux and Denilson Barbosa},
-      year={2023},
-      eprint={2303.01410},
-      archivePrefix={arXiv},
-      primaryClass={cs.CL}
-}
-```
+Please refer to the [paper](https://gitlab.com/UAlberta/nlpwokkbench/paper).
 
 ## Deployment
 Docker is the preferred way of deployment.
 Requires a newer docker and docker compose plugin. Tested with docker v20.10.16.
 
+Credentials can be provided as environment variables:
+``` bash
+export BEARER_TOKEN=AAAAAAAAAAA # Twitter API bearer token
+export ELASTIC_PASSWORD=elastic # Elasticsearch password, default is `elastic`
+```
+They can also be stored in `.env`.
+
 Clone the repositories and build docker images:
 ```bash
 # build images
 docker compose -f docker-compose.dev.yml --profile non-gpu --profile gpu build
-# provide credentials
-export BEARER_TOKEN=AAAAAAAAAAA # Twitter API bearer token
-export ELASTIC_PASSWORD=elastic # Elasticsearch password, default is `elastic`
 # run
 docker compose -f docker-compose.dev.yml --profile non-gpu --profile gpu up
 ```
@@ -326,3 +320,13 @@ After adding multi-stage build, `docker-compose.dev.yml` needs to be changed to 
 # `vader` can be replaced with other services defined in `docker-compose.dev.yml`
 ./run-test.sh coverage # combine coverage info from all tests and print coverage report
 ```
+
+### Automated testing
+Once your commits are pushed to GitLab, a pipeline is triggered to automatically run tests. The pipeline badge indicates whether tests are passed, and the coverage badge shows the line coverage percentage.
+
+![pipeline](https://gitlab.com/UAlberta/nlpwokkbench/workbench-api/badges/dev/pipeline.svg)
+![coverage](https://gitlab.com/UAlberta/nlpwokkbench/workbench-api/badges/dev/coverage.svg)
+
+The tests triggered by the push are defined in `.gitlab-ci.yml`. When adding new tests, a `build-something` job and a `test-something` job should be added following the structure of existing jobs in the file.
+
+The test jobs will be executed by a local runner on one of our own machines (rather than on a shared runner provided by GitLab). The local GitLab Runner is installed on our machines as a Docker container, following [the official tutorial](https://docs.gitlab.com/runner/install/docker.html). Our local runner is then [registered with the repository](https://docs.gitlab.com/runner/register/index.html). The default image for the docker executors is `docker:20.10.16`. We are using [Docker socket binding](https://docs.gitlab.com/ee/ci/docker/using_docker_build.html#use-docker-socket-binding) so that docker images / containers created within docker containers will be running **on the host system**, instead of becoming nested containers. This is beneficial for caching and reusing layers.

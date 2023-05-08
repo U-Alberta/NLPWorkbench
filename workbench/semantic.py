@@ -13,11 +13,13 @@ from pathlib import Path
 
 try:
     from lark import Lark, Tree, Transformer
-except ImportError:
+except ImportError as e:
+    import os
+    if os.environ.get("RPC_CALLER") is None:
+        raise e
     class Transformer:
         # mock class
         pass
-    logging.warning("lark is not installed. This is expected if calling celery tasks.")
 
 from .utils import asdict, dynamic_import, Models as model_manager
 from .config import Config

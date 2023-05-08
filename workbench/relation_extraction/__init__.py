@@ -1,12 +1,12 @@
 import itertools
 from os import listdir
 import os
-import yaml
 from pathlib import Path
 import logging
 import collections
 
 try:
+    import yaml
     import tensorflow as tf
     import spacy
     import neuralcoref
@@ -17,10 +17,10 @@ try:
 
     from . import entitylinker, bert_wrapper
     from .instance import Instance
-except ImportError:
-    logging.warning(
-        "dependencies are not installed. This is expected if calling celery tasks."
-    )
+except ImportError as e:
+    import os
+    if os.environ.get("RPC_CALLER") is None:
+        raise e
 
 from .configs import (
     MODELS_DIR,

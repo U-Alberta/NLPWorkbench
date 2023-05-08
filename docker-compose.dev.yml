@@ -6,9 +6,11 @@ services:
       - "50050:50050"
     build:
       dockerfile: ./build/Dockerfile.api
+      target: ${COMPOSE_TARGET:-prod}
     environment:
       - RPC_BROKER=${RPC_BROKER:-redis://redis}
       - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
+      - BING_KEY=${BING_KEY}
     profiles:
       - non-gpu
       - debug
@@ -138,7 +140,6 @@ services:
       - NEO4JLABS_PLUGINS=["apoc", "graph-data-science"]
     profiles:
       - non-gpu
-      - debug
     stop_grace_period: 2m
 
   snc:
@@ -153,6 +154,7 @@ services:
       - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
       - BEARER_TOKEN=${BEARER_TOKEN}
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - BING_KEY=${BING_KEY}
     depends_on:
       - snc-neo4j
       - redis

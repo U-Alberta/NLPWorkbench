@@ -59,11 +59,15 @@ case $COMMAND in
         # FIXME: dependent services are not stopped
         docker compose -f docker-compose.testing.yml --profile non-gpu --profile gpu -p $PROJ stop $SERVICE || true
         docker rmi -f $(docker images --filter=reference="${IMAGE}" -q) || true
+        docker network rm $(docker network ls --filter=name="${PROJ}_*" -q) || true
+        docker volume prune -f || true
         ;;
     "cleanup-all")
         echo "cleanup-all"
         docker compose -f docker-compose.testing.yml --profile non-gpu --profile gpu -p $PROJ down -v || true
         docker rmi -f $(docker images --filter=reference="${PROJ}_*" -q) || true
+        docker network rm $(docker network ls --filter=name="${PROJ}_*" -q) || true
+        docker volume prune -f || true
         ;;
     "coverage")
         coverage combine *.coverage

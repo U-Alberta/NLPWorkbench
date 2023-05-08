@@ -26,8 +26,7 @@ class Config:
 
     es_url = "http://elasticsearch:9200"
     es_auth = ("elastic", "elastic")
-    es_article_collection_whitelist = ("bloomberg-reuters-v1", "signal-v1", )
-    es_article_collection = "bloomberg-reuters-v1"
+    es_article_collection_whitelist = ("bloomberg-reuters-v1", "signal-v1", ) # DEPRECATED
     es_entity_collection = "entities"
 
     class CacheKeys:
@@ -40,5 +39,5 @@ class Config:
         re_output = "re-output-v2"
 
     class RPC:
-        broker = os.environ.get("RPC_BROKER", "redis://redis")
-        backend = os.environ.get("RPC_BACKEND", "redis://redis")
+        broker = os.environ.get("RPC_BROKER", "redis://:UTLhRXzpeF5sa2QjRch5PPl2EJx1H2@redis")
+        backend = os.environ.get("RPC_BACKEND", "redis://:UTLhRXzpeF5sa2QjRch5PPl2EJx1H2@redis")

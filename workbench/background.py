@@ -6,7 +6,11 @@ Firing background tasks, like precomputing model outputs.
 
 import logging
 import re
+import os
 
+assert os.environ["RPC_CALLER"] == "1"
+
+from flask import g
 import networkx as nx
 from celery import group
 from celery.result import allow_join_result
@@ -35,7 +39,8 @@ def fix_es_news(news):
 
 
 def get_doc(doc_id):
-    r = es_request("GET", f"/{Config.es_article_collection}/_doc/{doc_id}").json()
+    # TODO: string interpolation doesn't look safe
+    r = es_request("GET", f"/{g.collection}/_doc/{doc_id}").json()
     r['_source']['id'] = doc_id
     return fix_es_news(r["_source"])
 

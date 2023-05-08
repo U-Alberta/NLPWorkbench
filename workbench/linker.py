@@ -2,18 +2,20 @@ from typing import *
 from dataclasses import dataclass
 import logging
 
+from .config import Config
+
 try:
     import numpy as np
     from neo4j import GraphDatabase
 
-    from config import Config
     neo4j = GraphDatabase.driver(Config.neo4j_url, auth=Config.neo4j_auth)
-except ImportError:
-    logging.warning("neo4j is not installed. This is expected if calling celery tasks.")
+except ImportError as e:
+    import os
+    if os.environ.get("RPC_CALLER") is None:
+        raise e
 
 from .ner import EntityMention
 from .utils import es_request, Models, asdict
-from .config import Config
 from .rpc import create_celery
 
 celery = create_celery("workbench.linker")

@@ -7,6 +7,7 @@ services:
     environment:
       - RPC_BROKER=${RPC_BROKER:-"redis://redis"}
       - RPC_BACKEND=${RPC_BACKEND:-"redis://redis"}
+      - BING_KEY=${BING_KEY}
     profiles:
       - non-gpu
       - debug
@@ -69,7 +70,7 @@ services:
       - non-gpu
     volumes:
       - type: "bind"
-        source: /home/ubuntu/workbench/docker-data/sqlite/embeddings.sqlite3 # CHANGE THIS
+        source: /data/local/workbench-data/embeddings.sqlite3 # CHANGE THIS
         target: /app/db/embeddings.sqlite3
     deploy:
       resources:
@@ -203,17 +204,17 @@ services:
       - debug
     volumes:
       - type: bind
-        source: /home/ubuntu/workbench/docker-data/neo4j # CHANGE THIS
+        source: /data/local/workbench-data/neo4j # CHANGE THIS
         target: /data
-      - type: bind
-        source: /home/ubuntu/workbench/docker-data/neo4j-certs # CHANGE THIS
-        target: /var/lib/neo4j/certificates
+      #- type: bind
+      #  source: /home/ubuntu/workbench/docker-data/neo4j-certs # CHANGE THIS
+      #  target: /var/lib/neo4j/certificates
     environment:
       - NEO4J_dbms_connector_bolt_client__auth=OPTIONAL
       - NEO4J_dbms_connector_bolt_listen__address=0.0.0.0:7687
-      - NEO4J_dbms_connector_bolt_advertised__address=newskg.wdmuofa.ca:9201
+      #- NEO4J_dbms_connector_bolt_advertised__address=newskg.wdmuofa.ca:9201
       - NEO4J_dbms_connector_bolt_tls__level=OPTIONAL
-      - NEO4J_dbms_ssl_policy_bolt_enabled=true
+      #- NEO4J_dbms_ssl_policy_bolt_enabled=true
     deploy:
       resources:
         limits:
@@ -229,7 +230,6 @@ services:
       - NEO4J_AUTH=neo4j/snc123
       - NEO4J_dbms_security_procedures_unrestricted=gds.*,apoc.*
       - NEO4J_dbms_security_procedures_allowlist=gds.*,apoc.*
-      - NEO4JLABS_PLUGINS=["apoc", "graph-data-science"]
     profiles:
       - non-gpu
       - debug
@@ -248,10 +248,15 @@ services:
       - non-gpu
       - debug
     environment:
-      - RPC_BROKER=${RPC_BROKER:-"redis://redis"}
-      - RPC_BACKEND=${RPC_BACKEND:-"redis://redis"}
+      - RPC_BROKER=${RPC_BROKER:-redis://redis}
+      - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
+      - BEARER_TOKEN=${BEARER_TOKEN}
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - BING_KEY=${BING_KEY}
     depends_on:
       - snc-neo4j
+      - redis
+      - elasticsearch
     deploy:
       resources:
         limits:
@@ -278,7 +283,7 @@ services:
       - non-gpu
     volumes:
       - type: bind
-        source: /home/ubuntu/workbench/docker-data/elasticsearch # CHANGE THIS
+        source: /data/local/workbench-data/elasticsearch # CHANGE THIS
         target: /usr/share/elasticsearch/data
     deploy:
       resources:
