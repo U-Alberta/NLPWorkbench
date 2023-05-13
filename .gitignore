@@ -10,3 +10,7 @@ tmp/
 */tmp/
 .env
 **/.DS_Store
+
+# Virtual environment
+.venv
+venv
