@@ -12,3 +12,4 @@ importlib-metadata==4.13.0
 celery[redis]==5.2.7
 networkx==2.6.*
 backoff==2.2.*
+pre-commit
