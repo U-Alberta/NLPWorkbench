@@ -11,6 +11,7 @@ try:
     from amqp.utils import str_to_bytes
     import kombu.serialization
     from celery import Celery
+
     celery_available = True
 except ImportError:
     logging.info("Celery is not installed. Only XMLRPC is available.")
@@ -32,19 +33,22 @@ def dill_decoder(encoded):
 def create_celery(name, reroute=None):
     if celery_available:
         from celery.app import trace
+
         trace.LOG_SUCCESS = """Task %(name)s[%(id)s] succeeded in %(runtime)ss"""
 
-        kombu.serialization.register("dill", dill_encoder, dill_decoder, content_type='application/x-python-serialize', content_encoding='binary')
+        kombu.serialization.register(
+            "dill",
+            dill_encoder,
+            dill_decoder,
+            content_type="application/x-python-serialize",
+            content_encoding="binary",
+        )
         app = Celery(name, broker=Config.RPC.broker, backend=Config.RPC.backend)
-        app.conf.task_serializer='dill'
-        app.conf.result_serializer='dill'
-        app.conf.accept_content = ['dill', 'json']
-        app.conf.broker_transport_options = {
-            'queue_order_strategy': 'priority'
-        }
-        app.conf.task_routes = {
-            '*': { 'queue': name if reroute is None else reroute }
-        }
+        app.conf.task_serializer = "dill"
+        app.conf.result_serializer = "dill"
+        app.conf.accept_content = ["dill", "json"]
+        app.conf.broker_transport_options = {"queue_order_strategy": "priority"}
+        app.conf.task_routes = {"*": {"queue": name if reroute is None else reroute}}
         return app
     else:
         return DummyCelery()

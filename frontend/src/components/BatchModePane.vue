@@ -8,8 +8,15 @@
   <!-- build query -->
   <div v-if="currentStep===0" style="margin-top: 20px">
     <el-form :model="queryForm" label-width="140px">
-      <el-form-item label="Index name">
-        <el-input v-model="queryForm.index"/>
+      <el-form-item label="Collection" prop="collection">
+        <el-select v-model="queryForm.collection" filterable placeholder="Select" :loading="collectionListLoading" loading-text="Loading...">
+          <el-option
+              v-for="item in collections"
+              :key="item"
+              :label="item"
+              :value="item"
+          />
+        </el-select>
       </el-form-item>
       <el-form-item label="Do not re-compute">
         <el-checkbox-group v-model="queryForm.exclude">
@@ -19,6 +26,7 @@
           <el-checkbox label="Person Relation Extraction"/>
           <el-checkbox label="Sentiment Analysis"/>
           <el-checkbox label="Relation Extraction"/>
+          <el-checkbox label="Crime Classification"/>
         </el-checkbox-group>
       </el-form-item>
       <el-form-item label="KQL">
@@ -38,7 +46,7 @@
         @errorMsg="(x) => $.emit('errorMsg', x)"
         @successMsg="(x)=>$.emit('successMsg', x)"
         :es-query="esQuery"
-        :index="queryForm.index"
+        :index="queryForm.collection"
     />
   </div>
   <!-- submit jobs -->
@@ -55,6 +63,7 @@
           <el-checkbox label="Person Relation Extraction"/>
           <el-checkbox label="Sentiment Analysis"/>
           <el-checkbox label="Relation Extraction"/>
+          <el-checkbox label="Crime Classification"/>
         </el-checkbox-group>
       </el-form-item>
       <el-button type="primary" :disabled="tasksToDo.length === 0 || submitLoading" :loading="submitLoading"
@@ -66,13 +75,11 @@
   <el-row style="margin-top:20px">
     <el-button :disabled="currentStep === 0" @click="currentStep -= 1">
       <el-icon>
-        <ArrowLeft/>
-        ️
+        <arrow-left />
       </el-icon>&nbsp; Previous Step
     </el-button>
-    <el-button :disabled="currentStep === 2" @click="currentStep += 1">Next Step&nbsp;<el-icon>
-      <ArrowRight/>
-      ️
+    <el-button :disabled="currentStep === 2 || queryForm.collection.trim() === ''" @click="currentStep += 1">Next Step&nbsp;<el-icon>
+      <arrow-right />
     </el-icon>
     </el-button>
   </el-row>
@@ -81,21 +88,23 @@
 <script>
 import axios from 'axios'
 import { buildEsQuery } from "@cybernetex/kbn-es-query";
-import { fixAuthor } from '~/common'
 import DocBrowsingTable from "~/components/DocBrowsingTable.vue";
+import {ArrowLeft, ArrowRight} from "@element-plus/icons-vue";
 
 export default {
   name: "BatchModePane",
-  components: {DocBrowsingTable},
+  components: {ArrowRight, ArrowLeft, DocBrowsingTable},
   emits: ["errorMsg", "successMsg"],
   data() {
     return {
       currentStep: 0,
       queryForm: {
-        index: "bloomberg-reuters-v1", // TODO: select from dropdown list
+        collection: "",
         exclude: [],
         kql: "",
       },
+      collections: [],
+      collectionListLoading: false,
       tasksToDo: [],
       submitLoading: false
     }
@@ -114,7 +123,8 @@ export default {
         ["AMR Parsing", "raw-amr-output"],
         ["Person Relation Extraction", "raw-person-rel-output"],
         ["Sentiment Analysis", "vader-output"],
-        ["Relation Extraction", "re-output"]
+        ["Relation Extraction", "re-output-v2"],
+        ["Crime Classification", "crime-classifier-output.multiclass_prediction"],
       ]);
 
       const dsl = buildEsQuery(undefined, {language: "kuery", query: this.queryForm.kql})
@@ -148,18 +158,18 @@ export default {
         ["AMR Parsing", "amr"],
         ["Person Relation Extraction", "person_rel"],
         ["Sentiment Analysis", "sentiment"],
-        ["Relation Extraction", "relation"]
+        ["Relation Extraction", "relation"],
+        ["Crime Classification", "classify"],
       ]);
       const tasks = this.tasksToDo.map((x) => taskNames.get(x))
       const req = {
-        index: this.queryForm.index,
         query: this.esQuery,
         tasks: tasks,
       }
       this.submitLoading = true
 
       const that = this
-      axios.post(`${this.api}/admin/batch`, req).then((resp) => {
+      axios.post(`${this.api}/collection/${this.queryForm.collection}/batch`, req).then((resp) => {
         const successMsg = `${resp.data.num_tasks} total task(s) submitted for ${resp.data.num_docs} document(s).`
         that.$emit("successMsg", successMsg)
         that.currentStep = 0
@@ -173,6 +183,17 @@ export default {
     openLink: function (link) {
       window.open(link, '_blank').focus()
     },
+  },
+  mounted() {
+    this.collectionListLoading = true
+    axios.get(`${this.api}/collection/`).then((resp) => {
+      this.collections = resp.data
+    }).catch((e) => {
+      console.log(e)
+      this.$emit("errorMsg", e)
+    }).then(() => {
+      this.collectionListLoading = false
+    })
   }
 }
 </script>

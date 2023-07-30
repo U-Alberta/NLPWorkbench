@@ -1,159 +1,127 @@
 <template>
   <el-container style="height: 100vh">
-    <el-header style="height: auto; padding-bottom:10px; border-bottom: 1px  solid #2c3e50">
-      <el-alert v-if="errMsg" :title="errMsg" type="error" style="margin-top: 20px;"/>
-      <el-row style="align-items: center;">
-        <el-col :span="12" style="text-align: left">
-          <h1>NLP Workbench</h1>
-        </el-col>
-        <el-col :span="12" style="justify-content: right; column-gap:5px; display: flex">
-          <el-select v-model="collection" class="m-2" placeholder="Select" size="small">
-            <el-option
-                v-for="item in availableCollections"
-                :key="item"
-                :label="item"
-                :value="item"
-            />
-          </el-select>
-          <el-tooltip
-              class="box-item"
-              effect="dark"
-              content="refresh the collection list"
-              placement="bottom">
-            <el-button circle size="small" @click="loadCollections">
+    <el-container>
+      <el-aside class="aside" :class="{ 'aside-closed': !showSidebar }">
+        <el-row justify="end" v-if="showSidebar">
+          <el-button size="small" style="margin: 5px 5px 5px 5px" @click="showSidebar = false">
+            <el-icon>
+              <d-arrow-left />
+            </el-icon>
+          </el-button>
+        </el-row>
+        <el-row justify="center" v-else>
+          <el-button size="small" style="margin: 5px 5px 5px 5px" @click="openAllMenus">
+            <el-icon>
+              <d-arrow-right />
+            </el-icon>
+          </el-button>
+        </el-row>
+        <el-menu
+            :default-openeds="openedMenus"
+            :default-active="pane"
+            :collapse="!showSidebar"
+            :collapse-transition="false"
+            @select="onMenuSelect"
+        >
+          <el-menu-item index="document">
+            <el-icon>
+              <document />
+            </el-icon>
+            <span>Document</span>
+          </el-menu-item>
+          <el-sub-menu index="collection">
+            <template #title>
               <el-icon>
-                <Refresh />
+                <message-box />
               </el-icon>
-            </el-button>
-          </el-tooltip>
-        </el-col>
-      </el-row>
-    </el-header>
-    <el-container style="height: 100%;">
-      <el-main>
-        <div v-if="availableCollections.length > 0 || collection !== null">
-          <el-row style="margin-bottom: 20px" :gutter="10">
-            <el-col :span="10" >
-              <el-input v-model="documentIdInput" placeholder="Document article ID / URL"/>
-            </el-col>
-            <el-col :span="10" style="display: flex;justify-items: start">
-              <el-button @click="loadDocument" type="primary" plain>Load Document</el-button>
-              <el-button @click="loadDocument('random')" plain>☘️ Feelin' Lucky</el-button>
-            </el-col>
-            <el-col :span="4">
-              <el-button style="justify-self: end" plain @click="openLink('/admin/')"><el-icon><Operation />️</el-icon>&nbsp;  Admin</el-button>
-            </el-col>
-          </el-row>
-          <el-empty v-if="!documentInfo && !documentInfoLoading" description="No document selected."></el-empty>
-          <div v-loading="documentInfoLoading">
-            <el-descriptions v-if="documentInfo" title="Document Info">
-              <el-descriptions-item label="Title">{{ documentInfo.title }}</el-descriptions-item>
-              <el-descriptions-item label="Author">{{ documentInfo.author }}</el-descriptions-item>
-              <el-descriptions-item label="Published">{{documentInfo.published}}</el-descriptions-item>
-              <el-descriptions-item label="URL">{{documentInfo.url}}</el-descriptions-item>
-            </el-descriptions>
-            <el-collapse v-if="documentInfo">
-              <el-collapse-item title="Content">
-                <div style="text-align: left">{{documentInfo.content}}</div>
-              </el-collapse-item>
-            </el-collapse>
-          </div>
-          <el-tabs v-model="activeTab" v-if="documentInfo" type="border-card" style="margin-top: 40px;">
-            <el-tab-pane label="Entity Recognition" name="ner">
-              <NERTab :newsId="documentId" :newsIdInput="documentIdInput" :collection="collection" @errorMsg="handleErrMsg" />
-            </el-tab-pane>
-            <el-tab-pane label="Semantic Parsing" name="amr">
-              <SemanticParsingTab :newsId="documentId" :newsIdInput="documentIdInput" :collection="collection" @errorMsg="handleErrMsg"/>
-            </el-tab-pane>
-            <el-tab-pane label="Person Relations" name="per-rel">
-              <PersonRelTab :newsId="documentId" :newsIdInput="documentIdInput" :collection="collection" @errorMsg="handleErrMsg"/>
-            </el-tab-pane>
-            <el-tab-pane label="Sentiment" name="sentiment">
-              <SentimentTab :newsId="documentId" :newsIdInput="documentIdInput" :collection="collection" @errorMsg="handleErrMsg"/>
-            </el-tab-pane>
-            <el-tab-pane label="Relation" name="relation">
-              <RelationTab :newsId="documentId" :newsIdInput="documentIdInput" :collection="collection" @errorMsg="handleErrMsg"/>
-            </el-tab-pane>
-          </el-tabs>
-        </div>
-        <el-empty v-else description="No collection available" />
+              <span>Collection</span>
+            </template>
+            <el-menu-item index="create-collection" class="subitem">Create Collection</el-menu-item>
+            <el-menu-item index="list-collections" class="subitem">List Collections</el-menu-item>
+            <el-menu-item index="browse-collection" class="subitem">Browse Collection</el-menu-item>
+            <el-menu-item index="populate" class="subitem">Populate Collection</el-menu-item>
+            <el-menu-item index="batch" class="subitem">Batch Operation</el-menu-item>
+            <el-menu-item index="kibana" class="subitem" @click="openLink('/kibana/')">Open Kibana</el-menu-item>
+          </el-sub-menu>
+          <el-menu-item index="network">
+            <el-icon>
+              <connection />
+            </el-icon>
+            <span>Network</span>
+          </el-menu-item>
+          <el-sub-menu index="system">
+            <template #title>
+              <el-icon>
+                <setting />
+              </el-icon>
+              <span>System</span>
+            </template>
+            <el-menu-item index="track-jobs" class="subitem" @click="openLink('/flower/')">Track Jobs</el-menu-item>
+            <el-menu-item index="api-keys" class="subitem">API Keys</el-menu-item>
+          </el-sub-menu>
+        </el-menu>
+      </el-aside>
+      <div class="document-pane" v-if="pane === 'document'">
+        <el-header v-if="errMsg || successMsg" style="height: auto; border-bottom: 1px solid #dadce0;">
+          <el-alert v-if="errMsg" :title="errMsg" type="error" class="alert"  @close="errMsg = ''"/>
+          <el-alert v-if="successMsg" :title="successMsg" type="success" class="alert" @close="successMsg=''" />
+        </el-header>
+        <!-- load document pane here because we don't want paddings from el-main -->
+        <DocumentPane @errorMsg="handleErrMsg" @successMsg="handleSuccessMsg" />
+      </div>
+      <el-main v-else> <!-- load other panes here -->
+        <el-header v-if="errMsg || successMsg" style="height: auto; border-bottom: 1px solid #dadce0;">
+          <el-alert v-if="errMsg" :title="errMsg" type="error" class="alert"  @close="errMsg = ''"/>
+          <el-alert v-if="successMsg" :title="successMsg" type="success" class="alert" @close="successMsg=''" />
+        </el-header>
+        <BatchModePane v-if="pane === 'batch'" @errorMsg="handleErrMsg" @successMsg="handleSuccessMsg" />
+        <CreateCollectionPane v-else-if="pane === 'create-collection'" @errorMsg="handleErrMsg"
+          @successMsg="handleSuccessMsg" />
+        <ListCollectionsPane v-else-if="pane === 'list-collections'" @errorMsg="handleErrMsg"
+          @successMsg="handleSuccessMsg" />
+        <BrowseCollectionPane v-else-if="pane === 'browse-collection'" @errorMsg="handleErrMsg"
+          @successMsg="handleSuccessMsg" />
+        <PopulateCollectionPane v-else-if="pane==='populate'" @errorMsg="handleErrMsg" @successMsg="handleSuccessMsg" @enterKeys="(x)=>pane='api-keys'"/>
+        <APIKeysPane v-else-if="pane === 'api-keys'" @errorMsg="handleErrMsg" @successMsg="handleSuccessMsg"/>
+        <div v-else-if="externalPanes.includes(pane)">A new popup window will appear.</div>
+        <div v-else>Sorry, this feature is still under development. Please contact administrators if you have questions.</div>
       </el-main>
     </el-container>
   </el-container>
 </template>
 
-<script setup>
-
-</script>
-
 <script>
+import {defineComponent} from "vue";
+import DocumentPane from "~/components/DocumentPane.vue";
+import BatchModePane from "~/components/BatchModePane.vue";
+import CreateCollectionPane from "~/components/CreateCollectionPane.vue";
+import ListCollectionsPane from "~/components/ListCollectionsPane.vue";
+import PopulateCollectionPane from "~/components/PopulateCollectionPane.vue";
+import BrowseCollectionPane from "~/components/BrowseCollectionPane.vue";
+import APIKeysPane from "~/components/APIKeysPane.vue";
+import {Connection, DArrowLeft, DArrowRight, Document, MessageBox, Setting} from "@element-plus/icons-vue";
 
-import { fixAuthor } from "~/common";
-import axios from 'axios'
-import SemanticParsingTab from "~/components/SemanticParsingTab.vue";
-import NERTab from "~/components/NERTab.vue";
-import SentimentTab from "~/components/SentimentTab.vue";
-import RelationTab from "~/components/RelationTab.vue";
-import PersonRelTab from "~/components/PersonRelTab.vue";
-
-export default {
-  data() { return {
-    availableCollections: [],
-    collection: null,
-    documentIdInput: "jnQqSH8B-NK2HObsTr5c",
-    documentId: null,
-    documentInfo: null,
-    documentInfoLoading: false,
-    errMsg: "",
-    activeTab: "ner",
-  }
+export default defineComponent({
+  name: "MainApp",
+  components: {
+    Setting,
+    Connection,
+    MessageBox,
+    Document,
+    DArrowRight,
+    DArrowLeft,
+    DocumentPane, BrowseCollectionPane, PopulateCollectionPane, ListCollectionsPane, CreateCollectionPane, BatchModePane, APIKeysPane},
+  data() {
+    return {
+      externalPanes: ["batch", "track-jobs", "kibana"],
+      showSidebar: true,
+      pane: "document",
+      errMsg: "",
+      successMsg: "",
+      openedMenus: ['document', 'collection', 'network', 'system'],
+    }
   },
-  components: [SemanticParsingTab, NERTab, SentimentTab, RelationTab, PersonRelTab],
   methods: {
-    loadDocument(mode) {
-      this.errMsg = ""
-      this.documentInfoLoading = true
-      this.documentInfo = {
-        title: "Loading",
-        author: "Loading",
-        content: "Loading",
-        published: "Loading",
-        url: "Loading",
-      }
-      this.documentId = null
-
-      let documentId = this.documentIdInput.slice()
-      let method = "GET"
-      let reqData = null
-      if (mode === "random") {
-        documentId = "random"
-      } else {
-        if (documentId.includes(".") || documentId.includes(":")) {
-          method = "POST"
-          documentId = "import"
-          reqData = {
-            url: this.documentIdInput.slice()
-          }
-        }
-      }
-
-      axios({
-        url: `${this.api}/news/${documentId}`,
-        method: method,
-        data: reqData,
-        params: {collection: this.collection}
-      }).then((response) => {
-        this.documentInfo = response.data
-        this.documentInfo.author = fixAuthor(response.data.author)
-        this.documentIdInput = response.data.id
-        this.documentId = response.data.id
-      }).catch((error) => {
-        this.handleErrMsg(error)
-        this.documentInfo = null
-      }).then(() => {
-        this.documentInfoLoading = false
-      })
-    },
     handleErrMsg(e, prefix) {
       let errMsg = ""
       if (e.response && e.response.data) {
@@ -168,109 +136,58 @@ export default {
       }
       this.errMsg = errMsg
     },
-    refreshURL() {
-      const searchParams = new URLSearchParams(window.location.search)
-      if (this.collection) {
-        searchParams.set("collection", this.collection)
-      }
-      if (this.documentId) {
-        searchParams.set("doc", this.documentId)
-      }
-      const newRelPathQuery =  window.location.pathname + '?' + searchParams.toString()
-      history.pushState(null, null, newRelPathQuery)
+    handleSuccessMsg(msg) {
+      this.successMsg = msg
     },
-    loadCollections() {
-      axios.get(`${this.api}/snc/indexes`).then((resp) => {
-        this.availableCollections = resp.data
-        if (this.availableCollections.length === 0) {
-          this.collection = null
-        } else if (!this.availableCollections.includes(this.collection)) {
-          this.collection = this.availableCollections[0]
-        }
-        localStorage.setItem("collections", JSON.stringify(resp.data))
-      }).catch((err) => {
-        this.handleErrMsg(err, "Unable to load available collections.")
-      })
-    },
-    openLink(link) {
+    openLink: function (link) {
       window.open(link, '_blank').focus()
+    },
+    onMenuSelect: function (index, indexPath) {
+      this.pane = index
+    },
+    openAllMenus() {
+      this.openedMenus = ['document', 'collection', 'network', 'system']
+      this.showSidebar = true
     }
   },
   mounted() {
-    const queryString = window.location.search
-    const urlParams = new URLSearchParams(queryString)
-    const doc = urlParams.get("doc")
-    if (doc) {
-      this.documentIdInput = doc
-    }
-    const coll = urlParams.get("collection")
-    if (coll) {
-      this.collection = coll
-      this.availableCollections = [coll]
-    } else if (localStorage.getItem("coll")) {
-      this.collection = localStorage.getItem("coll")
-    }
-    const list = JSON.parse(localStorage.getItem("collections"))
-    if (list !== null && list.length > 0) {
-      this.availableCollections = list
-      if (this.collection === null) {
-        this.collection = this.availableCollections[0]
-      } else if (!this.availableCollections.includes((this.collection))) {
-        this.collection = null
-      }
-    }
-    this.loadCollections()
-  },
-  watch: {
-    collection: function(newValue) {
-      this.documentId = null
-      localStorage.setItem("coll", newValue)
-      this.refreshURL()
-    },
-    documentId: function(newValue) {
-      if (newValue === null) return
-      this.refreshURL()
-    }
+    this.openAllMenus()
   }
-}
+})
 </script>
 
-<style>
-#app {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-align: center;
-  color: #2c3e50;
-  height: 100vh
+<style scoped>
+.el-menu {
+  border-right: none;
 }
 
-.el-popper {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+.aside {
+  border-right: 1px solid #00000000;
+  height: 100%;
+  width: 200px;
+  overflow: scroll;
+  box-shadow: 0 1px 2px rgba(60,64,67,0.3), 0 2px 6px 2px rgba(60,64,67,0.15)
 }
 
-.token {
-  padding-left: 2px;
-  padding-right: 2px;
+.aside-closed {
+  width: auto;
 }
 
-.sentence {
-  display: flex;
-  margin-top: 30px;
-  flex-direction: row;
-  flex-wrap: wrap;
-  justify-content: flex-start;
-  align-items: center;
+.subitem {
+  font-size: 12px;
+  line-height: normal;
 }
 
-.unresolved {
-  text-decoration: underline dotted;
+.alert {
+  margin-top: 15px;
+  margin-bottom: 15px;
 }
 
-.highlighted {
-  background-color: yellow;
+.document-pane {
+  display: block;
+  flex: 1;
+  flex-basis: auto;
+  overflow: auto;
+  box-sizing: border-box;
 }
-
 </style>

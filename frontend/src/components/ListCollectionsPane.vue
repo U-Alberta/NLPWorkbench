@@ -17,7 +17,7 @@
         </el-tooltip>
         <el-button size="small" type="danger" @click="this.selectedName = scope.row.name; this.deleteDialogInput = ''; this.deleteDialogOpen = true">
           <el-icon>
-            <Delete />
+            <delete />
           </el-icon>
         </el-button>
       </template>
@@ -76,10 +76,13 @@
 </template>
 
 <script>
+import {defineComponent} from "vue";
 import axios from "axios";
+import {Delete, View} from "@element-plus/icons-vue";
 
-export default {
+export default defineComponent({
   name: "ListCollectionsPane",
+  components: {Delete, View},
   emits: ["errorMsg", "successMsg"],
   data() {
     return {
@@ -126,8 +129,8 @@ export default {
       this.collectionLog = null
       this.logDialogOpen = true
       this.logLoading = true
-      axios.post(`${this.api}/snc/getlog`, {"es_index_name": this.selectedName}).then((resp) => {
-        this.collectionLog = resp.data.reverse()
+      axios.get(`${this.api}/collection/${this.selectedName}/log`).then((resp) => {
+        this.collectionLog = resp.data
       }).catch((e) => {
         this.$emit("errorMsg", e)
         this.logDialogOpen = false
@@ -137,7 +140,7 @@ export default {
     },
     handleDelete() {
       this.deleteLoading = true
-      axios.delete(`${this.api}/snc/indexes/${this.selectedName}`).then((resp) => {
+      axios.delete(`${this.api}/collection/${this.selectedName}`).then((resp) => {
         this.$emit("successMsg", "Collection deleted.")
         this.refreshList()
       }).catch((e) => {
@@ -149,7 +152,7 @@ export default {
     },
     refreshList() {
       this.loading = true
-      axios.get(`${this.api}/snc/indexes?detailed`).then((resp) => {
+      axios.get(`${this.api}/collection/?detailed`).then((resp) => {
         this.collections = resp.data
       }).catch((e) => {
         console.log(e)
@@ -162,7 +165,7 @@ export default {
   mounted() {
     this.refreshList()
   }
-}
+})
 </script>
 
 <style scoped>

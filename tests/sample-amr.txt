@@ -1,0 +1,26 @@
+(z0 / appoint-01
+    :ARG0 (z1 / company
+              :wiki "Google"
+              :name (z2 / name
+                        :op1 "Google"))
+    :ARG1 (z3 / person
+              :wiki -
+              :name (z4 / name
+                        :op1 "John"
+                        :op2 "Liu")
+              :ARG0-of (z5 / have-org-role-91
+                           :ARG1 z1
+                           :ARG2 (z6 / chief
+                                     :topic (z7 / sell-01))))
+    :ARG2 (z8 / take-over-12
+              :ARG0 z3
+              :ARG1 (z9 / and
+                        :op1 (z10 / responsible-03
+                                  :ARG0 (z11 / person
+                                             :wiki -
+                                             :name (z12 / name
+                                                        :op1 "Lee"))
+                                  :ARG1 (z13 / business))
+                        :op2 (z14 / responsible-03
+                                  :ARG0 z11
+                                  :ARG1 (z15 / operate-01)))))

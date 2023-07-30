@@ -34,8 +34,8 @@ export default {
           {required: true, min: 1, trigger: 'blur', message: "Collection name is required"},
           {
             validator: (rule, value, callback) => {
-              if (value.length > 0 && !/[a-zA-Z0-9-_]+$/.test(value)) {
-                return callback(new Error('Collection name can only contain letters, numbers, underscore and dash.'))
+              if (value.length > 0 && !/[a-z0-9-_]+$/.test(value)) {
+                return callback(new Error('Collection name can only contain lower-case letters, numbers, underscore and dash.'))
               } else {
                 return callback()
               }
@@ -51,10 +51,9 @@ export default {
     submit() {
       this.submitLoading = true
       const req = {
-        index_name: this.form.name,
         description: this.form.description
       }
-      axios.put(`${this.api}/snc/indexes/create`, req).then((resp) => {
+      axios.put(`${this.api}/collection/${this.form.name}`, req).then((resp) => {
         const successMsg = `Collection created.`
         this.$emit("successMsg", successMsg)
         this.form = {
@@ -71,7 +70,7 @@ export default {
   },
   computed: {
     validated: function() {
-      return /^[a-zA-Z0-9-_]+$/.test(this.form.name)
+      return /^[a-z0-9-_]+$/.test(this.form.name)
     }
   }
 }

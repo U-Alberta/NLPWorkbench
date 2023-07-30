@@ -1,16 +1,22 @@
 import { createApp } from "vue";
-import App from "./App.vue";
-import "v-network-graph/lib/style.css"
-import VNetworkGraph from "v-network-graph";
+import MainApp from "./App.vue";
+import {configureApp} from "~/common";
 
+import "v-network-graph/lib/style.css"
 // import all element css, uncommented next line
 import "element-plus/dist/index.css";
 // or use cdn, uncomment cdn link in `index.html`
 import "~/styles/index.scss";
-import { configureApp } from "./common";
+import VNetworkGraph from "v-network-graph";
+import ElementPlus from 'element-plus'
+import ElTableInfiniteScroll from "el-table-infinite-scroll";
 
 // @ts-ignore
-const app = createApp(App);
-configureApp(app);
+const app = createApp(MainApp);
+configureApp(app)
+
+app.use(ElementPlus);
 app.use(VNetworkGraph);
+// @ts-ignore
+app.use(ElTableInfiniteScroll);
 app.mount("#app");

@@ -6,25 +6,33 @@ import os
 import re
 import json
 from itertools import product
-from dataclasses import dataclass, is_dataclass
+from dataclasses import dataclass
 from typing import *
 import logging
 from pathlib import Path
 
 try:
-    from lark import Lark, Tree, Transformer
+    from lark import Lark, Tree, Transformer, LarkError
 except ImportError as e:
     import os
+
     if os.environ.get("RPC_CALLER") is None:
         raise e
+
     class Transformer:
         # mock class
         pass
+
 
 from .utils import asdict, dynamic_import, Models as model_manager
 from .config import Config
 from .ner import extract_sentences
 from .rpc import create_celery
+
+
+with open(Path(__file__).parent / "penman.ebnf") as f:
+    _grammar = f.read()
+_parser = None
 
 amr_parsing_celery = create_celery("workbench.semantic", "amr_parsing")
 amr2text_celery = create_celery("workbench.semantic", "amr2text")
@@ -73,11 +81,11 @@ class AMRVariable:
     def add_edge(self, var2, relationship):
         self._edges.append(AMREdge(self, var2, relationship))
 
-    def to_spring(self) -> str:
-        s = f"\u0120( \u0120<pointer:{self.name[1:]}> \u0120{self.concept} "
+    def to_spring(self, delim="\u0120", lit_begin="<lit>", lit_end="</lit>") -> str:
+        s = f"{delim}( {delim}<pointer:{self.name[1:]}> {delim}{self.concept} "
         for edge in self.outbound_edges:
-            s += f"\u0120:{edge.relationship} {edge.var2.to_spring()} "
-        s += "\u0120)"
+            s += f"{delim}:{edge.relationship} {edge.var2.to_spring(delim, lit_begin, lit_end)} "
+        s += f"{delim})"
         return s
 
 
@@ -85,6 +93,7 @@ class AMRVariable:
 class AMRConstant:
     value: Union[int, str, float]
     name: str = None
+    literal: bool = False
 
     def asdict(self):
         return asdict(self)
@@ -98,16 +107,19 @@ class AMRConstant:
     def pretty_tree(self, indent=0) -> str:
         return " " * indent + str(self) + "\n"
 
-    def to_spring(self) -> str:
-        if type(self.value) == int or type(self.value) == float:
-            return f"\u0120{self.value}"
+    def to_spring(self, delim="\u0120", lit_begin="<lit> ", lit_end=" </lit>") -> str:
+        if self.literal:
+            return f"{delim}{lit_begin}{self.value}{lit_end}{delim}"
         else:
-            return f"\u0120<lit> \u0120{self.value} \u0120</lit>"
+            return f"{delim}{self.value} "
 
 
 @dataclass
 class AMRRef:
     name: str
+
+    def to_spring(self, delim="\u0120", lit_begin=None, lit_end=None) -> str:
+        return f"{delim}<pointer:{self.name[1:]}>"
 
 
 AMRNode = Union[AMRVariable, AMRConstant, AMRRef]
@@ -146,113 +158,168 @@ class AMRGraph:
 
 
 @amr_parsing_celery.task
-def run_amr_parsing(title, content) -> str:
+def run_amr_parsing(title, content, return_amrbart_format=False) -> str:
+    import torch
     logging.info("Run amr parsing...")
     sentences, _ = extract_sentences(title, content)
+    sentences = [" ".join(sent) for sent in sentences]
+    if len(sentences) == 0:
+        return ""
     with TemporaryDirectory() as amr_input_dir, TemporaryDirectory() as amr_output_dir:
         logging.info("amr ourput dir: %s", amr_output_dir)
         with open(f"{amr_input_dir}/test.jsonl", "w") as amr_input_file:
             for sent in sentences:
-                amr_input_file.write(
-                    json.dumps({"src": " ".join(sent), "tgt": ""}) + "\n"
-                )
-        with open(f"{amr_input_dir}/train.jsonl", "w") as amr_input_file:
-            amr_input_file.write(json.dumps({"src": "", "tgt": ""}) + "\n")
-        with open(f"{amr_input_dir}/val.jsonl", "w") as amr_input_file:
-            amr_input_file.write(json.dumps({"src": "", "tgt": ""}) + "\n")
+                amr_input_file.write(json.dumps({"sent": sent, "amr": ""}) + "\n")
 
         env = os.environ
-        env["CUDA_VISIBLE_DEVICES"] = ""  # disable GPU
-        env["OMP_NUM_THREADS"] = "3"
+        env["OMP_NUM_THREADS"] = "16"
         # run amrbart
-        cmd_args = [
-            "--data_dir", amr_input_dir,
-            "--train_data_file", amr_input_dir + "/train.jsonl",
-            "--eval_data_file", amr_input_dir + "/val.jsonl",
-            "--test_data_file", amr_input_dir + "/test.jsonl",
-            "--model_type", Config.amr_model,
-            "--model_name_or_path", Config.amr_model,
-            "--tokenizer_name_or_path", "facebook/bart-large",
-            "--val_metric", "smatch",
-            "--unified_input",
-            "--output_dir", amr_output_dir,
-            "--cache_dir", "/tmp",
-            "--num_sanity_val_steps", "0",
-            "--src_block_size", "256",
-            "--tgt_block_size", "512",
-            "--eval_max_length", "512",
-            "--eval_num_workers", "0",
-            "--process_num_workers", "1",
-            "--do_eval",
-            "--seed", "42",
-            "--eval_beam", "5",
-        ]
+        cmd_args = {
+            "data_dir": amr_input_dir,
+            "task": "text2amr",
+            "test_file": amr_input_dir + "/test.jsonl",
+            "output_dir": amr_output_dir,
+            "data_cache_dir": "/tmp",
+            "overwrite_cache": True,
+            "model_name_or_path": Config.amr_model,
+            "overwrite_output_dir": "",
+            "unified_input": True,
+            "per_device_eval_batch_size": 4,
+            "max_source_length": 300,
+            "max_target_length": 768,
+            "val_max_target_length": 768,
+            "generation_max_length": 768,
+            "generation_num_beams": 5,
+            "predict_with_generate": "",
+            "smart_init": False,
+            "use_fast_tokenizer": False,
+            "logging_dir": "/tmp",
+            "seed": 42,
+            "dataloader_num_workers": 4,
+            "eval_dataloader_num_workers": 4,
+            "do_predict": "",
+            "include_inputs_for_metrics": "",
+            "ddp_find_unused_parameters": False,
+            "report_to": "tensorboard",
+            "dataloader_pin_memory": True,
+        }
 
+        if torch.cuda.is_available():  # use fp16 if gpu is available
+            cmd_args["fp16"] = ""
+            cmd_args["fp16_backend"] = "auto"
+            cmd_args["fp16_full_eval"] = ""
+
+        cmd_args_array = []
+        for k, v in cmd_args.items():
+            cmd_args_array.append(f"--{k}")
+            if v != "":
+                cmd_args_array.append(str(v))
+        print(cmd_args_array)
         call_amrbart = dynamic_import(Config.amr_script, Config.amr_script_entrypoint)
-        call_amrbart(cmd_args, model_manager)
+        call_amrbart(cmd_args_array, model_manager)
 
-        with open(f"{amr_output_dir}/val_outputs/validation_predictions_0.txt") as f:
-            return f.read()
+        with open(f"{amr_output_dir}/generated_predictions.txt") as f:
+            raw_output = f.readlines()
+        assert len(raw_output) == len(sentences)
+
+        if not return_amrbart_format:
+            output_lines = []
+            for sent, amr in zip(sentences, raw_output):
+                sent = sent.replace("\n", " ")
+                amr = amr.replace("</AMR>", "")
+                amr = convert_amrbart_v2_output(amr)
+                output_lines.append(f"# ::snt {sent}")
+                output_lines.append(amr)
+                output_lines.append("")
+            return "\n".join(output_lines)
+        else:
+            amrbart_output = []
+            for sent, amr in zip(sentences, raw_output):
+                sent = sent.replace("\n", " ")
+                amr = amr.replace("</AMR>", "")
+                amrbart_output.append({"sent": sent, "amr": amr})
+            return amrbart_output
 
 
 @amr2text_celery.task
-def run_amr_to_text(roots: List[AMRNode]) -> List[str]:
+def run_amr_to_text(roots: List[AMRNode], amrbart_input: List = None) -> List[str]:
     """
     Each amr graph must be a rooted tree.
     Pass in the root nodes.
     """
+    import torch
+    if amrbart_input is None:
+        amrbart_input = []
+    if len(roots) + len(amrbart_input) == 0:
+        return []
     with TemporaryDirectory() as amr_input_dir, TemporaryDirectory() as amr_output_dir:
         with open(f"{amr_input_dir}/test.jsonl", "w") as amr_input_file:
             for root in roots:
-                amr_input_file.write(json.dumps({"src": "", "tgt": root.to_spring()}))
+                amr_string = root.to_spring(delim=" ", lit_begin='"', lit_end='"')
+                amr_input_file.write(json.dumps({"sent": "", "amr": amr_string}))
                 amr_input_file.write("\n")
-        with open(f"{amr_input_dir}/train.jsonl", "w") as amr_input_file:
-            amr_input_file.write(json.dumps({"src": "", "tgt": ""}) + "\n")
-        with open(f"{amr_input_dir}/val.jsonl", "w") as amr_input_file:
-            amr_input_file.write(json.dumps({"src": "", "tgt": ""}) + "\n")
+            for amr in amrbart_input:
+                amr_input_file.write(json.dumps(amr))
+                amr_input_file.write("\n")
 
         env = os.environ
-        env["CUDA_VISIBLE_DEVICES"] = ""  # disable GPU
-        env["OMP_NUM_THREADS"] = "3"
+        env["OMP_NUM_THREADS"] = "8"
         # run amrbart
-        cmd_args = [
-            "--data_dir", amr_input_dir,
-            "--train_data_file", amr_input_dir + "/train.jsonl",
-            "--eval_data_file", amr_input_dir + "/val.jsonl",
-            "--test_data_file", amr_input_dir + "/test.jsonl",
-            "--model_type", Config.amr2text_model,
-            "--model_name_or_path", Config.amr2text_model,
-            "--tokenizer_name_or_path", "facebook/bart-large",
-            "--val_metric", "bleu",
-            "--max_epochs", "1",
-            "--max_steps", "-1",
-            "--unified_input",
-            "--output_dir", amr_output_dir,
-            "--cache_dir", "/tmp",
-            "--num_sanity_val_steps", "0",
-            "--src_block_size", "1024",
-            "--tgt_block_size", "384",
-            "--eval_max_length", "384",
-            "--eval_num_workers", "0",
-            "--process_num_workers", "1",
-            "--do_eval",
-            "--seed", "42",
-            "--eval_beam", "5",
-        ]
+        cmd_args = {
+            "data_dir": amr_input_dir,
+            "task": "amr2text",
+            "test_file": amr_input_dir + "/test.jsonl",
+            "output_dir": amr_output_dir,
+            "data_cache_dir": "/tmp",
+            "overwrite_cache": True,
+            "overwrite_output_dir": "",
+            "model_name_or_path": Config.amr2text_model,
+            "unified_input": True,
+            "per_device_eval_batch_size": 4,
+            "max_source_length": 768,
+            "max_target_length": 300,
+            "val_max_target_length": 300,
+            "generation_max_length": 300,
+            "generation_num_beams": 5,
+            "predict_with_generate": "",
+            "smart_init": False,
+            "use_fast_tokenizer": False,
+            "logging_dir": "/tmp",
+            "seed": 42,
+            "dataloader_num_workers": 4,
+            "eval_dataloader_num_workers": 2,
+            "do_predict": "",
+            "include_inputs_for_metrics": "",
+            "ddp_find_unused_parameters": False,
+            "report_to": "tensorboard",
+            "dataloader_pin_memory": True,
+        }
+        if torch.cuda.is_available():  # use fp16 if gpu is available
+            cmd_args["fp16"] = ""
+            cmd_args["fp16_backend"] = "auto"
+            cmd_args["fp16_full_eval"] = ""
 
+        cmd_args_array = []
+        for k, v in cmd_args.items():
+            cmd_args_array.append(f"--{k}")
+            if v != "":
+                cmd_args_array.append(str(v))
+        print(cmd_args_array)
         call_amrbart = dynamic_import(
             Config.amr2text_script, Config.amr2text_script_entrypoint
         )
-        call_amrbart(cmd_args, model_manager)
+        call_amrbart(cmd_args_array, model_manager)
 
-        with open(f"{amr_output_dir}/val_outputs/validation_predictions_0.txt") as f:
-            return f.read().splitlines()
+        with open(f"{amr_output_dir}/generated_predictions.txt") as f:
+            return f.readlines()
 
 
-def parse_amr_output_file_content(content, should_simplify_graph=False, **kwargs) -> List[Tuple[str, AMRGraph]]:
-    with open(Path(__file__).parent / "penman.ebnf") as f:
-        grammar = f.read()
-    parser: Lark = Lark(grammar, start="amr_tree")
+def parse_amr_output_file_content(
+    content, should_simplify_graph=False, **kwargs
+) -> List[Tuple[str, AMRGraph]]:
+    global _parser
+    if _parser is None:
+        _parser = Lark(_grammar, start="amr_tree")
 
     lines = content.split("\n")
     lines.append("")
@@ -268,9 +335,14 @@ def parse_amr_output_file_content(content, should_simplify_graph=False, **kwargs
         elif not line.strip():
             if len(amr_output_lines) > 0:
                 amr_output = " ".join(amr_output_lines)
-                tree = parser.parse(amr_output)
+                try:
+                    tree = _parser.parse(amr_output)
+                except LarkError:
+                    logging.warning(f"Failed to parse AMR: {amr_output}")
+                    continue
                 graph = amr_tree_to_graph(tree, **kwargs)
                 outputs.append((sent, graph))
+                print(sent)
                 amr_output_lines = []
         else:
             amr_output_lines.append(line)
@@ -280,6 +352,48 @@ def parse_amr_output_file_content(content, should_simplify_graph=False, **kwargs
 def parse_amr_output_file(filename, **kwargs):
     with open(filename) as f:
         return parse_amr_output_file_content(f.read(), **kwargs)
+
+
+def convert_amrbart_v2_output(v2_output):
+    output = v2_output
+    # try to fix mismatched brackets
+    if output.count("(") != output.count(")"):
+        tokens = []
+        for line in output.splitlines():
+            tokens.extend(line.strip().split())
+            tokens.append('\n')
+        tokens.pop()
+        open_paren = 0
+        tracking = True
+        for i, token in enumerate(tokens):
+            if token == '\n':
+                continue
+            print(f"tok {token}", open_paren, tracking)
+            if token == '<lit>':
+                tracking = False
+            elif token == '</lit>':
+                tracking = True
+            if not tracking:
+                continue
+            if token == '(':
+                open_paren += 1
+            elif token == ')':
+                if open_paren == 0:
+                    tokens[i] = ''
+                else:
+                    open_paren -= 1
+        output = " ".join(tokens)
+    # convert <pointer:N> to zN
+    output = re.sub(r"<pointer:(\d+)>", r"z\1 /", output, flags=re.MULTILINE)
+    # convert zN / ) to zN) (if zN is a reference and is the last argument)
+    output = re.sub(r"z(\d+) / \)", r"z\1 )", output, flags=re.MULTILINE)
+    # convert zN / : to zN : (if zN is a reference and is not the last argument)
+    output = re.sub(r"z(\d+) / :", r"z\1 :", output, flags=re.MULTILINE)
+    # convert <lit> and </lit> to "
+    output = re.sub(r"<lit> ", r'"', output, flags=re.MULTILINE)
+    output = re.sub(r" </lit>", r'"', output, flags=re.MULTILINE)
+
+    return output
 
 
 class ParseToAMRTreeTransformer(Transformer):
@@ -295,8 +409,10 @@ class ParseToAMRTreeTransformer(Transformer):
     def literal(self, value):
         assert len(value) > 0
         value = value[0].value
+        is_literal = False
         if value[0] == '"':
             value = value[1:-1]
+            is_literal = True
         elif value in ("+", "-", "imperative", "expressive"):
             pass
         else:
@@ -306,7 +422,7 @@ class ParseToAMRTreeTransformer(Transformer):
                     break
                 except ValueError:
                     pass
-        return AMRConstant(value)
+        return AMRConstant(value, None, is_literal)
 
     def var_ref(self, children):
         return AMRRef(children[0].value)
@@ -321,7 +437,7 @@ class ParseToAMRTreeTransformer(Transformer):
         return node
 
 
-def amr_tree_to_graph(tree: 'Tree', add_inv_edges_to_nodes=False) -> AMRGraph:
+def amr_tree_to_graph(tree: "Tree", add_inv_edges_to_nodes=False) -> AMRGraph:
     """
     Convert AMR tree to graph
     1. resolve variable references
@@ -352,7 +468,9 @@ def amr_tree_to_graph(tree: 'Tree', add_inv_edges_to_nodes=False) -> AMRGraph:
                 collect_edges(e.var2)
                 if isinstance(e.var2, AMRRef):  # resolve reference
                     e.var2 = node_map[e.var2.name]
-                if e.relationship.endswith("-of") and e.relationship != 'consist-of':  # inverse relationship
+                if (
+                    e.relationship.endswith("-of") and e.relationship != "consist-of"
+                ):  # inverse relationship
                     e.relationship = e.relationship[:-3]
                     e.var1, e.var2 = e.var2, e.var1
                     if add_inv_edges_to_nodes:
@@ -361,7 +479,7 @@ def amr_tree_to_graph(tree: 'Tree', add_inv_edges_to_nodes=False) -> AMRGraph:
 
     collect_nodes(amr_tree)
     collect_edges(amr_tree)
-    for e in inv_edges: # if add_inv_edges_to_nodes
+    for e in inv_edges:  # if add_inv_edges_to_nodes
         for e in inv_edges:
             e.var1._edges.append(e)
     return AMRGraph(nodes, edges)
@@ -372,7 +490,7 @@ def simplify_graph(graph: AMRGraph):
     nodes_to_remove = set()
     edges = []
     for edge in graph.edges:
-        if edge.relationship == 'wiki':
+        if edge.relationship == "wiki":
             nodes_to_remove.add(edge.var2.name)
             # remove wiki edges
             continue
@@ -383,16 +501,18 @@ def simplify_graph(graph: AMRGraph):
             name_node = edge.var1
             # combine names
             parts = []
-            i = 1 # this part is O(n^2) but I assume n is small enough
+            i = 1  # this part is O(n^2) but I assume n is small enough
             while True:
                 try:
-                    op_edge = next(x for x in edge.var1._edges if x.relationship == f"op{i}")
+                    op_edge = next(
+                        x for x in edge.var1._edges if x.relationship == f"op{i}"
+                    )
                     parts.append(str(op_edge.var2.value))
                     nodes_to_remove.add(op_edge.var2.name)
                     i += 1
                 except StopIteration:
                     break
-            new_node = AMRConstant(" ".join(parts), "c"+name_node.name)
+            new_node = AMRConstant(" ".join(parts), "c" + name_node.name)
             new_name_nodes[name_node.name] = new_node
         else:
             edges.append(edge)
@@ -400,7 +520,11 @@ def simplify_graph(graph: AMRGraph):
         if edge.var2.name in new_name_nodes:
             edge.var2 = new_name_nodes[edge.var2.name]
     graph.edges = edges
-    graph.nodes = [x for x in graph.nodes if x.name not in new_name_nodes and x.name not in nodes_to_remove] + list(new_name_nodes.values())
+    graph.nodes = [
+        x
+        for x in graph.nodes
+        if x.name not in new_name_nodes and x.name not in nodes_to_remove
+    ] + list(new_name_nodes.values())
     return graph
 
 
@@ -465,25 +589,6 @@ def extract_person_relations(graph: AMRGraph) -> List[AMRVariable]:
     return relations
 
 
-def extract_person_relations_from_file(filename):
-    import json
-
-    sent_and_graphs = parse_amr_output_file(filename, add_inv_edges_to_nodes=True)
-    with open("cache/person_relations.txt", "w") as text_f, open(
-        "cache/person_relations_spring.jsonl", "w"
-    ) as spring_f:
-        for sent, graph in sent_and_graphs:
-            relations = extract_person_relations(graph)
-            text_f.write(f"{sent}\n\n")
-            for rel in relations:
-                rel: AMRNode
-                text_f.write(f"{rel.pretty_tree()}\n")
-                spring_f.write(
-                    json.dumps({"src": "", "tgt": rel.to_spring(), "sent": sent})
-                )
-                spring_f.write("\n")
-
-
 def extract_person_relations_from_amr_content(amr_content):
     sents_and_graphs = parse_amr_output_file_content(
         amr_content, add_inv_edges_to_nodes=True
@@ -499,111 +604,7 @@ def extract_person_relations_from_amr_content(amr_content):
     return list(zip(sents, texts, rel_graphs))
 
 
-def test_run():
-    title = "Timeline: Google shutters Chinese site, moves to Hong Kong"
-    # content = '''SHANGHAI  (Reuters) - Google Inc closed its China-based search service on Monday and began redirecting Web searchers to an uncensored site in Hong Kong, drawing harsh comments from Beijing that raised doubts about the company's future in the world's largest Internet market.
-    #
-    # Following are some key developments in Google's bumpy foray into China: 2000 - Google develops Chinese-language interface for its Google.com website. 2002 - Google.com becomes temporarily unavailable to Chinese users, with interference from domestic competition suspected. July 2005 - Google hires ex-Microsoft executive Lee Kai Fu as head of Google China. Microsoft sues Google over the move, claiming Lee will inevitably disclose propriety information to Google. The two rivals reach a settlement on the suit over Lee in December. Jan 2006 - Google rolls out Google.cn, its China-based search page that, in accordance with Chinese rules, censors search results. Google says it made the trade-off to "make meaningful and positive contributions" to development in China while abiding by the country's strict censorship laws. Aug 2008 - Google launches free music downloads for users in China to better compete with market leader Baidu Inc. March 2009 - China blocks access to Google's YouTube video site. June 2009 - A Chinese official accuses Google of spreading obscene content over the Internet. The comments come a day after Google.com, Gmail and other Google online services became inaccessible to many users in China. Sept 2009 - Lee resigns as Google China head to start his own company. Google appoints sales chief John Liu to take over Lee's business and operational responsibilities. Oct 2009 - A group of Chinese authors accuses Google of violating copyrights with its digital library, with many threatening to sue. Jan 2010 - Google announces it is no longer willing to censor searches in China and may pull out of the country. Jan 2010 - Google postpones launch of two Android phones in China. Feb 2010 - The New York Times reports the hacking attacks on Google had been traced to two schools in China, citing people familiar with the investigation. The schools deny involvement. March 22, 2010 - Google announces it will move its mainland Chinese-language portal and begin rerouting searches to its Hong Kong-based site.'''
-    content = "A quick brown fox jumps jumps over the lazy dog."
-    run_amr_parsing(title, content)
-
-
-def test_parse_single():
-    text = """(z0 / page
-    :medium-of (z1 / search-01)
-    :ARG1-of (z2 / base-01
-                 :location (z3 / country
-                               :wiki "China"
-                               :name (z4 / name
-                                         :op1 "China")))
-    :ARG0-of (z5 / censure-01
-                 :ARG1 (z6 / result
-                           :mod z1)
-                 :ARG1-of (z7 / accord-02
-                              :ARG2 (z8 / rule
-                                        :mod z3)))
-    :poss (z9 / company
-              :wiki "Google"
-              :name (z10 / name
-                         :op1 "Google.cn")))"""
-    tree = parse_single_amr_output(text)
-    print(tree.pretty())
-
-    amr_tree_to_graph(tree)
-
-
-def test_parse_full():
-    def dictify(obj):
-        if isinstance(obj, dict):
-            return {k: dictify(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
-            return [dictify(v) for v in obj]
-        elif is_dataclass(obj):
-            return obj.asdict()  # assume custom asdict is implemented
-        else:
-            return obj
-
-    import json
-
-    output = parse_amr_output_file("cache/validation_predictions_0.txt")
-    output = [{"sentence": sent, "graph": dictify(graph)} for sent, graph in output]
-    with open("cache/graphs.json", "w") as f:
-        json.dump(output, f, indent=2)
-
-
-def test_polarity():
-    text = """(z0 / obligate-01
-   :ARG2 (z1 / go-02
-            :ARG0 (z2 / boy)
-            :polarity -))"""
-    tree = parse_single_amr_output(text)
-    graph = amr_tree_to_graph(tree)
-    print(tree.pretty())
-
-
-def test_person_rel():
-    text = """
-(z0 / appoint-01
-    :ARG0 (z1 / company
-              :wiki "Google"
-              :name (z2 / name
-                        :op1 "Google"))
-    :ARG1 (z3 / person
-              :wiki -
-              :name (z4 / name
-                        :op1 "John"
-                        :op2 "Liu")
-              :ARG0-of (z5 / have-org-role-91
-                           :ARG1 z1
-                           :ARG2 (z6 / chief
-                                     :topic (z7 / sell-01))))
-    :ARG2 (z8 / take-over-12
-              :ARG0 z3
-              :ARG1 (z9 / and
-                        :op1 (z10 / responsible-03
-                                  :ARG0 (z11 / person
-                                             :wiki -
-                                             :name (z12 / name
-                                                        :op1 "Lee"))
-                                  :ARG1 (z13 / business))
-                        :op2 (z14 / responsible-03
-                                  :ARG0 z11
-                                  :ARG1 (z15 / operate-01)))))
-    """
-    tree = parse_single_amr_output(text)
-    graph = amr_tree_to_graph(tree, add_inv_edges_to_nodes=True)
-    relations = extract_person_relations(graph)
-    for r in relations:
-        r.print_tree()
-        print(r.to_spring())
-
-
-def test_person_rel_full():
-    extract_person_relations_from_file("cache/AMR-jnQqSH8B-NK2HObsTr5c.txt")
-
-
 if __name__ == "__main__":
-    # test_run()
     import logging
     import os
     import torch
@@ -614,8 +615,34 @@ if __name__ == "__main__":
     logging.getLogger("penman.layout").setLevel("CRITICAL")
 
     if os.environ.get("AMRPARSING_RPC"):
-        amr_parsing_celery.start(argv=["worker", "-l", "INFO", "--concurrency=1", "-Q", "amr_parsing", "-P", "solo", "-n", "amr-parsing-worker@%n"])
+        amr_parsing_celery.start(
+            argv=[
+                "worker",
+                "-l",
+                "INFO",
+                "--concurrency=1",
+                "-Q",
+                "amr_parsing",
+                "-P",
+                "solo",
+                "-n",
+                "amr-parsing-worker@%n",
+            ]
+        )
     elif os.environ.get("AMR2TEXT_RPC"):
-        amr2text_celery.start(argv=["worker", "-l", "INFO", "--concurrency=1", "-Q", "amr2text", "-P", "solo", "-n", "amr2text-worker@%n"])
+        amr2text_celery.start(
+            argv=[
+                "worker",
+                "-l",
+                "INFO",
+                "--concurrency=1",
+                "-Q",
+                "amr2text",
+                "-P",
+                "solo",
+                "-n",
+                "amr2text-worker@%n",
+            ]
+        )
     else:
         raise ValueError("No RPC server specified in environment variables")

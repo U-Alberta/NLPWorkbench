@@ -1,0 +1,4 @@
+Collection management APIs and background tasks
+
+APIs: list, create, delete collections, read collection logs
+Background tasks: import from file, search, twitter; build graphs

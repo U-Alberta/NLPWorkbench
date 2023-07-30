@@ -23,7 +23,7 @@ chmod 0755 /path/to/neo4j/certs/bolt/private.key
 
 Modify `docker-compose.yml` file to mount the volumes to the correct locations (the folders you created above). Search for `volumes:` or `# CHANGE THIS` in `docker-compose.yml` and replace `source: ` with the correct path.
 
-Follow this [document](https://www.elastic.co/guide/en/kibana/current/docker.html) to set elasticsearch passwords and generate enrollment tokens for kibana.
+**This step may not be needed. Open `workbench-url/kibana` in browser first to see if kibana is working.** Follow this [document](https://www.elastic.co/guide/en/kibana/current/docker.html) to set elasticsearch passwords and generate enrollment tokens for kibana.
 ```bash
 # set password for user elastic
 docker exec -it nlp-workbench-elasticsearch-1 /usr/share/elasticsearch/bin/elasticsearch-reset-password -u elastic -i

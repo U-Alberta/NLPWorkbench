@@ -10,6 +10,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
+
 def fields_to_batches(d, keys_to_ignore=[]):
     keys = [key for key in d.keys() if key not in keys_to_ignore]
     lengths = [len(d[k]) for k in keys]
@@ -18,34 +19,42 @@ def fields_to_batches(d, keys_to_ignore=[]):
     res = [{k: d[k][i] for k in keys} for i in range(length)]
     return res
 
+
 def get_sentence_of_span(span, sentence_starts, doc_tokens):
     """
     Return the index of the sentence that the span is part of.
     """
     # Inclusive sentence ends
     sentence_ends = [x - 1 for x in sentence_starts[1:]] + [doc_tokens - 1]
-    in_between = [span[0] >= start and span[1] <= end
-                  for start, end in zip(sentence_starts, sentence_ends)]
+    in_between = [
+        span[0] >= start and span[1] <= end
+        for start, end in zip(sentence_starts, sentence_ends)
+    ]
     assert sum(in_between) == 1
     the_sentence = in_between.index(True)
     return the_sentence
 
 
 class Dataset:
-    def __init__(self, json_file=None, pred_file=None, doc_range=None, documents=None, js=None):
+    def __init__(
+        self, json_file=None, pred_file=None, doc_range=None, documents=None, js=None
+    ):
         if documents:
             self.documents = documents
             self.js = js
         else:
             self.js = self._read(json_file, pred_file)
             if doc_range is not None:
-                self.js = self.js[doc_range[0]:doc_range[1]]
+                self.js = self.js[doc_range[0] : doc_range[1]]
             self.documents = [Document(js) for js in self.js]
 
     def chunks(self, size):
         total_chunks = (len(self.documents) + size - 1) // size
         for i in range(total_chunks):
-            yield Dataset(documents=self.documents[i * size:(i + 1) * size], js=self.js[i * size:(i + 1) * size])
+            yield Dataset(
+                documents=self.documents[i * size : (i + 1) * size],
+                js=self.js[i * size : (i + 1) * size],
+            )
 
     def update_from_js(self, js):
         self.js = js
@@ -79,24 +88,37 @@ class Dataset:
 class Document:
     def __init__(self, js):
         self._doc_key = js["doc_key"]
-        entries = fields_to_batches(js, ["doc_key", "clusters", "predicted_clusters", "section_starts"])
+        entries = fields_to_batches(
+            js, ["doc_key", "clusters", "predicted_clusters", "section_starts"]
+        )
         sentence_lengths = [len(entry["sentences"]) for entry in entries]
         sentence_starts = np.cumsum(sentence_lengths)
         sentence_starts = np.roll(sentence_starts, 1)
         sentence_starts[0] = 0
         self.sentence_starts = sentence_starts
-        self.sentences = [Sentence(entry, sentence_start, sentence_ix)
-                          for sentence_ix, (entry, sentence_start)
-                          in enumerate(zip(entries, sentence_starts))]
+        self.sentences = [
+            Sentence(entry, sentence_start, sentence_ix)
+            for sentence_ix, (entry, sentence_start) in enumerate(
+                zip(entries, sentence_starts)
+            )
+        ]
         if "clusters" in js:
-            self.clusters = [Cluster(entry, i, self)
-                             for i, entry in enumerate(js["clusters"])]
+            self.clusters = [
+                Cluster(entry, i, self) for i, entry in enumerate(js["clusters"])
+            ]
         if "predicted_clusters" in js:
-            self.predicted_clusters = [Cluster(entry, i, self)
-                                       for i, entry in enumerate(js["predicted_clusters"])]
+            self.predicted_clusters = [
+                Cluster(entry, i, self)
+                for i, entry in enumerate(js["predicted_clusters"])
+            ]
 
     def __repr__(self):
-        return "\n".join([str(i) + ": " + " ".join(sent.text) for i, sent in enumerate(self.sentences)])
+        return "\n".join(
+            [
+                str(i) + ": " + " ".join(sent.text)
+                for i, sent in enumerate(self.sentences)
+            ]
+        )
 
     def __getitem__(self, ix):
         return self.sentences[ix]
@@ -107,7 +129,6 @@ class Document:
     def print_plaintext(self):
         for sent in self:
             print(" ".join(sent.text))
-
 
     def find_cluster(self, entity, predicted=True):
         """
@@ -134,33 +155,46 @@ class Sentence:
         self.sentence_ix = sentence_ix
         # Gold
         if "ner_flavor" in entry:
-            self.ner = [NER(this_ner, self.text, sentence_start, flavor=this_flavor)
-                        for this_ner, this_flavor in zip(entry["ner"], entry["ner_flavor"])]
+            self.ner = [
+                NER(this_ner, self.text, sentence_start, flavor=this_flavor)
+                for this_ner, this_flavor in zip(entry["ner"], entry["ner_flavor"])
+            ]
         elif "ner" in entry:
-            self.ner = [NER(this_ner, self.text, sentence_start)
-                        for this_ner in entry["ner"]]
+            self.ner = [
+                NER(this_ner, self.text, sentence_start) for this_ner in entry["ner"]
+            ]
         else:
             self.ner = []
         if "relations" in entry:
-            self.relations = [Relation(this_relation, self.text, sentence_start) for
-                              this_relation in entry["relations"]]
+            self.relations = [
+                Relation(this_relation, self.text, sentence_start)
+                for this_relation in entry["relations"]
+            ]
         if "events" in entry:
             self.events = Events(entry["events"], self.text, sentence_start)
 
         # Predicted
         if "predicted_ner" in entry:
-            self.predicted_ner = [NER(this_ner, self.text, sentence_start, flavor=None) for
-                                  this_ner in entry["predicted_ner"]]
+            self.predicted_ner = [
+                NER(this_ner, self.text, sentence_start, flavor=None)
+                for this_ner in entry["predicted_ner"]
+            ]
         if "predicted_relations" in entry:
-            self.predicted_relations = [Relation(this_relation, self.text, sentence_start) for
-                                        this_relation in entry["predicted_relations"]]
+            self.predicted_relations = [
+                Relation(this_relation, self.text, sentence_start)
+                for this_relation in entry["predicted_relations"]
+            ]
         if "predicted_events" in entry:
-            self.predicted_events = Events(entry["predicted_events"], self.text, sentence_start)
+            self.predicted_events = Events(
+                entry["predicted_events"], self.text, sentence_start
+            )
 
         # Top spans
         if "top_spans" in entry:
-            self.top_spans = [NER(this_ner, self.text, sentence_start, flavor=None) for
-                                this_ner in entry["top_spans"]]
+            self.top_spans = [
+                NER(this_ner, self.text, sentence_start, flavor=None)
+                for this_ner in entry["top_spans"]
+            ]
 
     def __repr__(self):
         the_text = " ".join(self.text)
@@ -195,15 +229,17 @@ class Span:
         self.start_sent = start - sentence_start
         self.end_sent = end - sentence_start
         self.span_sent = (self.start_sent, self.end_sent)
-        self.text = text[self.start_sent:self.end_sent + 1]
+        self.text = text[self.start_sent : self.end_sent + 1]
 
     def __repr__(self):
         return str((self.start_sent, self.end_sent, self.text))
 
     def __eq__(self, other):
-        return (self.span_doc == other.span_doc and
-                self.span_sent == other.span_sent and
-                self.text == other.text)
+        return (
+            self.span_doc == other.span_doc
+            and self.span_sent == other.span_sent
+            and self.text == other.text
+        )
 
     def __hash__(self):
         tup = self.span_doc + self.span_sent + (" ".join(self.text),)
@@ -236,12 +272,16 @@ class Argument:
         self.event_type = event_type
 
     def __repr__(self):
-        return self.span.__repr__()[:-1] + ", " + self.event_type + ", " + self.role + ")"
+        return (
+            self.span.__repr__()[:-1] + ", " + self.event_type + ", " + self.role + ")"
+        )
 
     def __eq__(self, other):
-        return (self.span == other.span and
-                self.role == other.role and
-                self.event_type == other.event_type)
+        return (
+            self.span == other.span
+            and self.role == other.role
+            and self.event_type == other.event_type
+        )
 
     def __hash__(self):
         return self.span.__hash__() + hash((self.role, self.event_type))
@@ -257,9 +297,11 @@ class NER:
         return self.span.__repr__() + ": " + self.label
 
     def __eq__(self, other):
-        return (self.span == other.span and
-                self.label == other.label and
-                self.flavor == other.flavor)
+        return (
+            self.span == other.span
+            and self.label == other.label
+            and self.flavor == other.flavor
+        )
 
 
 class Relation:
@@ -273,7 +315,9 @@ class Relation:
         self.label = label
 
     def __repr__(self):
-        return self.pair[0].__repr__() + ", " + self.pair[1].__repr__() + ": " + self.label
+        return (
+            self.pair[0].__repr__() + ", " + self.pair[1].__repr__() + ": " + self.label
+        )
 
     def __eq__(self, other):
         return (self.pair == other.pair) and (self.label == other.label)
@@ -294,7 +338,6 @@ class AtomicRelation:
 
     def __repr__(self):
         return f"({self.ent0} | {self.ent1} | {self.label})"
-
 
 
 class Event:
@@ -320,31 +363,48 @@ class Event:
 
 class Events:
     def __init__(self, events_json, text, sentence_start):
-        self.event_list = [Event(this_event, text, sentence_start) for this_event in events_json]
+        self.event_list = [
+            Event(this_event, text, sentence_start) for this_event in events_json
+        ]
         self.triggers = set([event.trigger for event in self.event_list])
-        self.arguments = set([arg for event in self.event_list for arg in event.arguments])
+        self.arguments = set(
+            [arg for event in self.event_list for arg in event.arguments]
+        )
 
     def __len__(self):
         return len(self.event_list)
 
     def __getitem__(self, i):
-       return self.event_list[i]
+        return self.event_list[i]
 
     def __repr__(self):
         return "\n\n".join([event.__repr__() for event in self.event_list])
 
     def span_matches(self, argument):
-        return set([candidate for candidate in self.arguments
-                    if candidate.span.span_sent == argument.span.span_sent])
+        return set(
+            [
+                candidate
+                for candidate in self.arguments
+                if candidate.span.span_sent == argument.span.span_sent
+            ]
+        )
 
     def event_type_matches(self, argument):
-        return set([candidate for candidate in self.span_matches(argument)
-                    if candidate.event_type == argument.event_type])
+        return set(
+            [
+                candidate
+                for candidate in self.span_matches(argument)
+                if candidate.event_type == argument.event_type
+            ]
+        )
 
     def matches_except_event_type(self, argument):
-        matched = [candidate for candidate in self.span_matches(argument)
-                   if candidate.event_type != argument.event_type
-                   and candidate.role == argument.role]
+        matched = [
+            candidate
+            for candidate in self.span_matches(argument)
+            if candidate.event_type != argument.event_type
+            and candidate.role == argument.role
+        ]
         return set(matched)
 
     def exact_match(self, argument):
@@ -358,7 +418,9 @@ class Cluster:
     def __init__(self, cluster, cluster_id, document):
         members = []
         for entry in cluster:
-            sentence_ix = get_sentence_of_span(entry, document.sentence_starts, document.n_tokens)
+            sentence_ix = get_sentence_of_span(
+                entry, document.sentence_starts, document.n_tokens
+            )
             sentence = document[sentence_ix]
             span = Span(entry[0], entry[1], sentence.text, sentence.sentence_start)
             ners = [x for x in sentence.ner if x.span == span]
@@ -392,6 +454,7 @@ class ClusterMember:
 
 # Code to do evaluation of predictions for a loaded dataset.
 
+
 def safe_div(num, denom):
     if denom > 0:
         return num / denom
@@ -423,11 +486,14 @@ def evaluate_sent(sent, counts):
     for prediction in sent.predicted_relations:
         if any([prediction == actual for actual in sent.relations]):
             counts["relations_matched"] += 1
-            if (prediction.pair[0] in correct_ner) and (prediction.pair[1] in correct_ner):
+            if (prediction.pair[0] in correct_ner) and (
+                prediction.pair[1] in correct_ner
+            ):
                 counts["strict_relations_matched"] += 1
 
     # Return the updated counts.
     return counts
+
 
 def evaluate_predictions(dataset):
     counts = Counter()
@@ -437,16 +503,27 @@ def evaluate_predictions(dataset):
             counts = evaluate_sent(sent, counts)
 
     scores_ner = compute_f1(
-        counts["ner_predicted"], counts["ner_gold"], counts["ner_matched"])
+        counts["ner_predicted"], counts["ner_gold"], counts["ner_matched"]
+    )
     scores_relations = compute_f1(
-        counts["relations_predicted"], counts["relations_gold"], counts["relations_matched"])
+        counts["relations_predicted"],
+        counts["relations_gold"],
+        counts["relations_matched"],
+    )
     scores_strict_relations = compute_f1(
-        counts["relations_predicted"], counts["relations_gold"], counts["strict_relations_matched"])
+        counts["relations_predicted"],
+        counts["relations_gold"],
+        counts["strict_relations_matched"],
+    )
 
-    return dict(ner=scores_ner, relation=scores_relations, strict_relation=scores_strict_relations)
+    return dict(
+        ner=scores_ner,
+        relation=scores_relations,
+        strict_relation=scores_strict_relations,
+    )
+
 
 def analyze_relation_coverage(dataset):
-    
     def overlap(s1, s2):
         if s2.start_sent >= s1.start_sent and s2.start_sent <= s1.end_sent:
             return True
@@ -475,10 +552,19 @@ def analyze_relation_coverage(dataset):
                     nrel_pred_cover += 1
                 if (r.pair[0] in top) and (r.pair[1] in top):
                     nrel_top_cover += 1
-                
+
                 if overlap(r.pair[0], r.pair[1]):
                     nrel_overlap += 1
 
-    print('Coverage by predicted entities: %.3f (%d / %d), #candidates: %d'%(nrel_pred_cover/nrel_gold*100.0, nrel_pred_cover, nrel_gold, npair_pred))
-    print('Coverage by top 0.4 spans: %.3f (%d / %d), #candidates: %d'%(nrel_top_cover/nrel_gold*100.0, nrel_top_cover, nrel_gold, npair_top))
-    print('Overlap: %.3f (%d / %d)'%(nrel_overlap / nrel_gold * 100.0, nrel_overlap, nrel_gold))
+    print(
+        "Coverage by predicted entities: %.3f (%d / %d), #candidates: %d"
+        % (nrel_pred_cover / nrel_gold * 100.0, nrel_pred_cover, nrel_gold, npair_pred)
+    )
+    print(
+        "Coverage by top 0.4 spans: %.3f (%d / %d), #candidates: %d"
+        % (nrel_top_cover / nrel_gold * 100.0, nrel_top_cover, nrel_gold, npair_top)
+    )
+    print(
+        "Overlap: %.3f (%d / %d)"
+        % (nrel_overlap / nrel_gold * 100.0, nrel_overlap, nrel_gold)
+    )

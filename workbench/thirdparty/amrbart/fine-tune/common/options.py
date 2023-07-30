@@ -1,225 +1,348 @@
-def add_model_specific_args(parser, root_dir):
-    parser.add_argument(
-        "--train_data_file",
+# coding:utf-8
+from typing import Optional
+from dataclasses import dataclass, field
+from common.training_args import TrainingArguments
+
+
+@dataclass
+class ModelArguments:
+    """
+    Arguments pertaining to which model/config/tokenizer we are going to fine-tune from.
+    """
+
+    model_name_or_path: str = field(
+        metadata={
+            "help": "Path to pretrained model or model identifier from huggingface.co/models"
+        }
+    )
+    config_name: Optional[str] = field(
         default=None,
-        type=str,
-        required=True,
-        help="The input training data file (a text file).",
+        metadata={
+            "help": "Pretrained config name or path if not the same as model_name"
+        },
     )
-    parser.add_argument(
-        "--output_dir",
-        type=str,
-        required=True,
-        help="The output directory where the model predictions and checkpoints will be written.",
-    )
-    parser.add_argument(
-        "--model_type",
-        type=str,
-        required=False,
-        help="The model architecture to be trained or fine-tuned.",
-    )
-    parser.add_argument(
-        "--data_dir",
-        type=str,
-        required=True,
-        help="The data directory",
-    )
-    # Other parameters
-    parser.add_argument(
-        "--eval_data_file",
+    tokenizer_name: Optional[str] = field(
         default=None,
-        type=str,
-        help="An optional input evaluation data file to evaluate the perplexity on (a text file).",
+        metadata={
+            "help": "Pretrained tokenizer name or path if not the same as model_name"
+        },
     )
-    parser.add_argument(
-        "--test_data_file",
+    cache_dir: Optional[str] = field(
         default=None,
-        type=str,
-        help="An optional input evaluation data file to evaluate the perplexity on (a text file).",
+        metadata={
+            "help": "Where to store the pretrained models downloaded from huggingface.co"
+        },
     )
-    parser.add_argument(
-        "--model_name_or_path",
+    use_fast_tokenizer: bool = field(
+        default=True,
+        metadata={
+            "help": "Whether to use one of the fast tokenizer (backed by the tokenizers library) or not."
+        },
+    )
+    model_revision: str = field(
+        default="main",
+        metadata={
+            "help": "The specific model version to use (can be a branch name, tag name or commit id)."
+        },
+    )
+    use_auth_token: bool = field(
+        default=False,
+        metadata={
+            "help": (
+                "Will use the token generated when running `transformers-cli login` (necessary to use this script "
+                "with private models)."
+            )
+        },
+    )
+    resize_position_embeddings: Optional[bool] = field(
         default=None,
-        type=str,
-        help="The model checkpoint for weights initialization. Leave None if you want to train a model from scratch.",
+        metadata={
+            "help": (
+                "Whether to automatically resize the position embeddings if `max_source_length` exceeds "
+                "the model's position embeddings."
+            )
+        },
     )
 
-    parser.add_argument(
-        "--config_name",
-        default=None,
-        type=str,
-        help="Optional pretrained config name or path if not the same as model_name_or_path. If both are None, initialize a new config.",
-    )
-    parser.add_argument(
-        "--tokenizer_name_or_path",
-        default=None,
-        type=str,
-        help="Optional pretrained tokenizer name or path if not the same as model_name_or_path. If both are None, initialize a new tokenizer.",
-    )
-    parser.add_argument(
-        "--cache_dir",
-        default=None,
-        type=str,
-        help="Optional directory to store the pre-trained models downloaded from s3 (instead of the default one)",
-    )
-    parser.add_argument(
-        "--src_block_size",
-        default=512,
-        type=int,
-        help="Optional input sequence length after tokenization.",
-    )
-    parser.add_argument(
-        "--tgt_block_size",
-        default=512,
-        type=int,
-        help="Optional input sequence length after tokenization.",
-    )
-    parser.add_argument(
-        "--src_prefix",
-        default="",
-        type=str,
-        help="Source prefix",
-    )
-    parser.add_argument(
-        "--tgt_prefix",
-        default="",
-        type=str,
-        help="Target prefix",
-    )
-    parser.add_argument(
-        "--val_metric",
-        default="bleu",
-        type=str,
-        help="validation metric",
-        required=False,
-        choices=["bleu", "rouge2", "loss", "smatch", None],
-    )
-    parser.add_argument(
-        "--eval_beam",
-        default=5,
-        type=int,
-        help="validation beams",
-    )
-    parser.add_argument(
-        "--eval_lenpen",
-        default=1.0,
-        type=float,
-        help="validation length penity",
-    )
-    parser.add_argument(
-        "--eval_max_length",
-        default=512,
-        type=int,
-        help="Max tgt generated length",
-    )
-    parser.add_argument(
-        "--label_smoothing",
-        default=0.0,
-        type=float,
-        help="Label smoothed Cross Entorpy Loss",
-    )
-    parser.add_argument(
-        "--dropout",
-        default=None,
-        type=float,
-        help="Dropout for model",
-    )
-    parser.add_argument("--unified_input", action="store_true", help="Whether to use unified input for finetuning.")
-    parser.add_argument("--smart_init", action="store_true", help="Whether to initialize AMR word embeddings smartly.")
-    parser.add_argument("--do_train", action="store_true", help="Whether to run training.")
-    parser.add_argument(
-        "--do_predict", action="store_true", help="Whether to run eval on the dev set."
-    )
-    parser.add_argument(
-        "--do_eval", action="store_true", help="Whether to run eval on the dev set."
-    )
-    parser.add_argument(
-        "--evaluate_during_training",
-        action="store_true",
-        help="Run evaluation during training at each logging step.",
+
+@dataclass
+class DataTrainingArguments:
+    """
+    Arguments pertaining to what data we are going to input our model for training and eval.
+    """
+
+    lang: Optional[str] = field(
+        default=None, metadata={"help": "Language id for summarization."}
     )
 
-    parser.add_argument(
-        "--per_gpu_train_batch_size",
-        default=4,
-        type=int,
-        help="Batch size per GPU/CPU for training.",
+    dataset_name: Optional[str] = field(
+        default=None,
+        metadata={"help": "The name of the dataset to use (via the datasets library)."},
     )
-    parser.add_argument(
-        "--per_gpu_eval_batch_size",
-        default=4,
-        type=int,
-        help="Batch size per GPU/CPU for evaluation.",
+    dataset_config_name: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "The configuration name of the dataset to use (via the datasets library)."
+        },
     )
-    parser.add_argument(
-        "--train_num_workers",
-        default=4,
-        type=int,
-        help="Batch size per GPU/CPU for training.",
+    text_column: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "The name of the column in the datasets containing the full texts (for summarization)."
+        },
     )
-    parser.add_argument(
-        "--eval_num_workers",
-        default=4,
-        type=int,
-        help="Batch size per GPU/CPU for evaluation.",
+    summary_column: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "The name of the column in the datasets containing the summaries (for summarization)."
+        },
     )
-    parser.add_argument(
-        "--process_num_workers",
-        default=1,
-        type=int,
-        help="Batch size per GPU/CPU for evaluation.",
+    data_dir: Optional[str] = field(
+        default=None, metadata={"help": "The directory which stores gold AMRs."}
     )
-    parser.add_argument(
-        "--early_stopping_patience",
-        type=int,
+    unified_input: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Whether to use unified input format for finetuning."},
+    )
+    train_file: Optional[str] = field(
+        default=None,
+        metadata={"help": "The input training data file (a jsonlines or csv file)."},
+    )
+    validation_file: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": (
+                "An optional input evaluation data file to evaluate the metrics (rouge) on (a jsonlines or csv file)."
+            )
+        },
+    )
+    test_file: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "An optional input test data file to evaluate the metrics (rouge) on (a jsonlines or csv file)."
+        },
+    )
+    data_cache_dir: Optional[str] = field(
+        default=None,
+        metadata={"help": "Where to store the cached dataset"},
+    )
+    overwrite_cache: bool = field(
+        default=False,
+        metadata={"help": "Overwrite the cached training and evaluation sets"},
+    )
+    preprocessing_num_workers: Optional[int] = field(
+        default=None,
+        metadata={"help": "The number of processes to use for the preprocessing."},
+    )
+    max_source_length: Optional[int] = field(
+        default=1024,
+        metadata={
+            "help": (
+                "The maximum total input sequence length after tokenization. Sequences longer "
+                "than this will be truncated, sequences shorter will be padded."
+            )
+        },
+    )
+    max_source_amr_length: Optional[int] = field(
+        default=1024,
+        metadata={
+            "help": (
+                "The maximum total input sequence length after tokenization. Sequences longer "
+                "than this will be truncated, sequences shorter will be padded."
+            )
+        },
+    )
+    max_target_length: Optional[int] = field(
+        default=128,
+        metadata={
+            "help": (
+                "The maximum total sequence length for target text after tokenization. Sequences longer "
+                "than this will be truncated, sequences shorter will be padded."
+            )
+        },
+    )
+    val_max_target_length: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": (
+                "The maximum total sequence length for validation target text after tokenization. Sequences longer "
+                "than this will be truncated, sequences shorter will be padded. Will default to `max_target_length`."
+                "This argument is also used to override the ``max_length`` param of ``model.generate``, which is used "
+                "during ``evaluate`` and ``predict``."
+            )
+        },
+    )
+    pad_to_max_length: bool = field(
+        default=False,
+        metadata={
+            "help": (
+                "Whether to pad all samples to model maximum sentence length. "
+                "If False, will pad the samples dynamically when batching to the maximum length in the batch. More "
+                "efficient on GPU but very bad for TPU."
+            )
+        },
+    )
+    max_train_samples: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": (
+                "For debugging purposes or quicker training, truncate the number of training examples to this "
+                "value if set."
+            )
+        },
+    )
+    max_eval_samples: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": (
+                "For debugging purposes or quicker training, truncate the number of evaluation examples to this "
+                "value if set."
+            )
+        },
+    )
+    max_predict_samples: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": (
+                "For debugging purposes or quicker training, truncate the number of prediction examples to this "
+                "value if set."
+            )
+        },
+    )
+    num_beams: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": (
+                "Number of beams to use for evaluation. This argument will be passed to ``model.generate``, "
+                "which is used during ``evaluate`` and ``predict``."
+            )
+        },
+    )
+    ignore_pad_token_for_loss: bool = field(
+        default=True,
+        metadata={
+            "help": "Whether to ignore the tokens corresponding to padded labels in the loss computation or not."
+        },
+    )
+    use_speaker_prefix: bool = field(
+        default=True,
+        metadata={
+            "help": "Whether to ignore the tokens corresponding to padded labels in the loss computation or not."
+        },
+    )
+    source_prefix: Optional[str] = field(
+        default="",
+        metadata={
+            "help": "A prefix to add before every source text (useful for T5 models)."
+        },
+    )
+    target_prefix: Optional[str] = field(
+        default="",
+        metadata={
+            "help": "A prefix to add before every target text (useful for T5 models)."
+        },
+    )
+    forced_bos_token: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": (
+                "The token to force as the first generated token after the decoder_start_token_id."
+                "Useful for multilingual models like mBART where the first generated token"
+                "needs to be the target language token (Usually it is the target language token)"
+            )
+        },
+    )
+
+    def __post_init__(self):
+        # if self.do_train and self.dataset_name is None and self.train_file is None and self.validation_file is None:
+        #     raise ValueError("Need either a dataset name or a training/validation file.")
+        # else:
+        #     if self.train_file is not None:
+        #         extension = self.train_file.split(".")[-1]
+        #         assert extension in [
+        #             "csv",
+        #             "json",
+        #             "jsonl",
+        #         ], "`train_file` should be a csv or a json file."
+        #     if self.validation_file is not None:
+        #         extension = self.validation_file.split(".")[-1]
+        #         assert extension in [
+        #             "csv",
+        #             "json",
+        #             "jsonl",
+        #         ], "`validation_file` should be a csv or a json file."
+        if self.val_max_target_length is None:
+            self.val_max_target_length = self.max_target_length
+
+
+@dataclass
+class Seq2SeqTrainingArguments(TrainingArguments):
+    """
+    Args:
+        sortish_sampler (`bool`, *optional*, defaults to `False`):
+            Whether to use a *sortish sampler* or not. Only possible if the underlying datasets are *Seq2SeqDataset*
+            for now but will become generally available in the near future.
+            It sorts the inputs according to lengths in order to minimize the padding size, with a bit of randomness
+            for the training set.
+        predict_with_generate (`bool`, *optional*, defaults to `False`):
+            Whether to use generate to calculate generative metrics (ROUGE, BLEU).
+        generation_max_length (`int`, *optional*):
+            The `max_length` to use on each evaluation loop when `predict_with_generate=True`. Will default to the
+            `max_length` value of the model configuration.
+        generation_num_beams (`int`, *optional*):
+            The `num_beams` to use on each evaluation loop when `predict_with_generate=True`. Will default to the
+            `num_beams` value of the model configuration.
+    """
+
+    eval_dataloader_num_workers: int = field(
         default=0,
-        help="Number of updates steps to control early stop",
+        metadata={
+            "help": (
+                "Number of subprocesses to use for data loading (PyTorch only). 0 means that the data will be loaded"
+                " in the main process."
+            )
+        },
     )
-    parser.add_argument(
-        "--lr_scheduler", default="linear", type=str, help="The initial learning rate for Adam."
+    sortish_sampler: bool = field(
+        default=False, metadata={"help": "Whether to use SortishSampler or not."}
     )
-    parser.add_argument(
-        "--learning_rate", default=5e-5, type=float, help="The initial learning rate for Adam."
+    smart_init: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use initialize AMR embeddings with their sub-word embeddings."
+        },
     )
-    parser.add_argument(
-        "--weight_decay", default=0.0, type=float, help="Weight decay if we apply some."
+    predict_with_generate: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use generate to calculate generative metrics (ROUGE, BLEU)."
+        },
     )
-    parser.add_argument(
-        "--adam_epsilon", default=1e-8, type=float, help="Epsilon for Adam optimizer."
+    task: str = field(
+        default="amr2text",
+        metadata={"help": "The name of the task, (amr2text or text2amr)."},
     )
-    parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
-    parser.add_argument(
-        "--warmup_steps", default=0, type=int, help="Linear warmup over warmup_steps."
+    generation_max_length: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": (
+                "The `max_length` to use on each evaluation loop when `predict_with_generate=True`. Will default "
+                "to the `max_length` value of the model configuration."
+            )
+        },
     )
-    parser.add_argument(
-        "--overwrite_output_dir",
-        action="store_true",
-        help="Overwrite the content of the output directory",
+    generation_num_beams: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": (
+                "The `num_beams` to use on each evaluation loop when `predict_with_generate=True`. Will default "
+                "to the `num_beams` value of the model configuration."
+            )
+        },
     )
-    parser.add_argument("--seed", type=int, default=42, help="random seed for initialization")
-    parser.add_argument(
-        "--fp16",
-        action="store_true",
-        help="Whether to use 16-bit (mixed) precision (through NVIDIA apex) instead of 32-bit",
+    early_stopping: Optional[int] = field(
+        default=5, metadata={"help": "Early stopping patience for training"}
     )
-    parser.add_argument(
-        "--fp16_opt_level",
-        type=str,
-        default="O2",
-        help="For fp16: Apex AMP optimization level selected in ['O0', 'O1', 'O2', and 'O3']."
-        "See details at https://nvidia.github.io/apex/amp.html",
+    eval_lenpen: Optional[float] = field(
+        default=1.0, metadata={"help": "lenpen for generation"}
     )
-    parser.add_argument(
-        "--save_total_limit",
-        type=int,
-        default=1,
-        help="Limit the total amount of checkpoints, delete the older checkpoints in the output_dir, does not delete by default",
-    )
-    parser.add_argument(
-        "--save_interval",
-        type=int,
-        default=-1,
-        help="save step interval",
-    )
-    parser.add_argument("--resume", action="store_true", help="Whether to continue run training.")
-    return parser

@@ -1,13 +1,13 @@
 # coding:utf-8
-import torch
-import itertools
-import json
-import random
-import numpy as np
-import nltk
 import os
 import re
+import json
+import nltk
+import torch
+import random
 import smatch
+import itertools
+import numpy as np
 from pathlib import Path
 from rouge_score import rouge_scorer, scoring
 from sacrebleu import corpus_bleu
@@ -17,31 +17,50 @@ from typing import Callable, Dict, Iterable, List, Tuple, Union
 from collections import Counter
 from common.constant import ROUGE_KEYS
 
+nltk.data.path.append("/mnt/nfs-storage/nltk_data/")
 
 
 def add_newline_to_end_of_each_sentence(x: str) -> str:
     """This was added to get rougeLsum scores matching published rougeL scores for BART and PEGASUS."""
     re.sub("<n>", "", x)  # remove pegasus newline char
-    assert nltk, "nltk must be installed to separate newlines between sentences. (pip install nltk)"
+    assert (
+        nltk
+    ), "nltk must be installed to separate newlines between sentences. (pip install nltk)"
     return "\n".join(nltk.sent_tokenize(x))
 
 
+# def set_seed(seed):
+#     # print(f"Setting seed to {seed}")
+#     random.seed(seed)
+#     np.random.seed(seed)
+#     torch.manual_seed(seed)
+#     torch.cuda.manual_seed(seed)
+#     torch.cuda.manual_seed_all(seed)
+#     os.environ["PYTHONHASHSEED"] = str(seed)
+#     torch.backends.cudnn.benchmark = False
+#     torch.backends.cudnn.deterministic = True
+
+
 def set_seed(seed):
-    # print(f"Setting seed to {seed}")
-    random.seed(seed)
-    np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    os.environ["PYTHONHASHSEED"] = str(seed)
-    torch.backends.cudnn.benchmark = False
+    np.random.seed(seed)
+    random.seed(seed)
     torch.backends.cudnn.deterministic = True
+
+
+def copy_weights(src, tgt):
+    src_params = dict(src.named_parameters())
+    tgt_params = tgt.named_parameters()
+    for name, param in tgt_params:
+        assert name in src_params, f"{name} not in {[n for n,v in src_params]}"
+        param.data = src_params[name].data
 
 
 def mask_tokens(
     inputs: torch.Tensor, tokenizer: PreTrainedTokenizer, mlm_probability
 ) -> Tuple[torch.Tensor, torch.Tensor]:
-    """ Prepare masked tokens inputs/labels for masked language modeling: 80% MASK, 10% random, 10% original. """
+    """Prepare masked tokens inputs/labels for masked language modeling: 80% MASK, 10% random, 10% original."""
 
     if tokenizer.mask_token is None:
         raise ValueError(
@@ -55,7 +74,10 @@ def mask_tokens(
         tokenizer.get_special_tokens_mask(val, already_has_special_tokens=True)
         for val in labels.tolist()
     ]
-    probability_matrix.masked_fill_(torch.tensor(special_tokens_mask, dtype=torch.bool, device=labels.device), value=0.0)
+    probability_matrix.masked_fill_(
+        torch.tensor(special_tokens_mask, dtype=torch.bool, device=labels.device),
+        value=0.0,
+    )
     if tokenizer._pad_token is not None:
         padding_mask = labels.eq(tokenizer.pad_token_id)
         probability_matrix.masked_fill_(padding_mask, value=0.0)
@@ -63,14 +85,21 @@ def mask_tokens(
     labels[~masked_indices] = -100  # We only compute loss on masked tokens
 
     # 80% of the time, we replace masked input tokens with tokenizer.mask_token ([MASK])
-    indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8).to(labels.device)).bool() & masked_indices
+    indices_replaced = (
+        torch.bernoulli(torch.full(labels.shape, 0.8).to(labels.device)).bool()
+        & masked_indices
+    )
     inputs[indices_replaced] = tokenizer.convert_tokens_to_ids(tokenizer.mask_token)
 
     # 10% of the time, we replace masked input tokens with random word
     indices_random = (
-        torch.bernoulli(torch.full(labels.shape, 0.5).to(labels.device)).bool() & masked_indices & ~indices_replaced
+        torch.bernoulli(torch.full(labels.shape, 0.5).to(labels.device)).bool()
+        & masked_indices
+        & ~indices_replaced
     )
-    random_words = torch.randint(len(tokenizer), labels.shape, dtype=torch.long, device=labels.device)
+    random_words = torch.randint(
+        len(tokenizer), labels.shape, dtype=torch.long, device=labels.device
+    )
     inputs[indices_random] = random_words[indices_random]
 
     # The rest of the time (10% of the time) we keep the masked input tokens unchanged
@@ -81,17 +110,23 @@ def save_dummy_batch(batch, tokenizer, output_dir):
     print("Saving dummy inputs...")
     json_out_path = open(output_dir + "/dummy_input.json", "w", encoding="utf-8")
     ith_dict = {}
-    # print('Input Id Size:', batch["input_ids"].size())
-    ith_dict["input_ids"] = str(batch["input_ids"].tolist())
-    ith_dict["input_tokens"] = tokenizer.batch_decode(batch["input_ids"].tolist())
-    label_data = batch["labels"].tolist()
-    ith_dict["label_ids"] = str(label_data)
-    # label_data_new = [[idx if idx!=-100 else tokenizer.pad_token_id for idx in ith_label] for ith_label in label_data]
-    ith_dict["label_tokens"] = tokenizer.batch_decode(label_data)
-    ith_dict["dec_input_ids"] = str(batch["decoder_input_ids"].tolist())
-    ith_dict["dec_input_tokens"] = tokenizer.batch_decode(batch["decoder_input_ids"].tolist())
-    # ith_dict["amr_ids"] = str(batch["amr_ids"].tolist())
-    # ith_dict["amr_tokens"] = tokenizer.batch_decode(batch["amr_ids"].tolist())
+    for k, v in batch.items():
+        if "_ids" in k and v is not None:
+            ith_dict[k] = str(v.tolist())
+            ith_dict[k.replace("ids", "tokens")] = tokenizer.batch_decode(
+                v.tolist(), clean_up_tokenization_spaces=False
+            )
+        elif "labels" in k:
+            ith_dict[k] = str(v.tolist())
+            label_data_new = [
+                [idx if idx != -100 else tokenizer.pad_token_id for idx in ith_label]
+                for ith_label in v.tolist()
+            ]
+            ith_dict[k + "_tokens"] = tokenizer.batch_decode(
+                label_data_new, clean_up_tokenization_spaces=False
+            )
+        else:
+            print(f"Skiping {k}...")
     json.dump(ith_dict, json_out_path, indent=4)
 
 
@@ -118,7 +153,9 @@ def trim_batch(input_ids, pad_token_id, attention_mask=None):
         return (input_ids[:, keep_column_mask], attention_mask[:, keep_column_mask])
 
 
-def shift_tokens_right(input_ids: torch.Tensor, pad_token_id: int, decoder_start_token_id: int):
+def shift_tokens_right(
+    input_ids: torch.Tensor, pad_token_id: int, decoder_start_token_id: int
+):
     """
     Shift input ids one token to the right.
     """
@@ -129,7 +166,6 @@ def shift_tokens_right(input_ids: torch.Tensor, pad_token_id: int, decoder_start
     assert pad_token_id is not None, "self.model.config.pad_token_id has to be defined."
     # replace possible -100 values in labels by `pad_token_id`
     shifted_input_ids.masked_fill_(shifted_input_ids == -100, pad_token_id)
-
     return shifted_input_ids
 
 
@@ -141,9 +177,8 @@ def convert_text(text):
 
 
 def eval_bleu_sents(ref_file, pred_file):
-
     dir_path = os.path.dirname(os.path.realpath(__file__))
-    folder_data_before = dir_path + "/../../utils"
+    folder_data_before = dir_path + "/../utils"
     cmd_string = (
         "perl "
         + folder_data_before
@@ -165,10 +200,19 @@ def eval_bleu_sents(ref_file, pred_file):
     return bleu_info
 
 
-def eval_bleu_sents_tok(ref_file, pred_file):
-
+def eval_bleu_sents_tok(gold_file, pred_file):
     dir_path = os.path.dirname(os.path.realpath(__file__))
-    folder_data_before = dir_path + "/../../utils"
+    folder_data_before = dir_path + "/../utils"
+    cmd_string = (
+        "perl "
+        + folder_data_before
+        + "/tokenizer.perl -threads 4 -no-escape < "
+        + gold_file
+        + " > "
+        + gold_file
+        + "_tok"
+    )
+    os.system(cmd_string)
 
     cmd_string = (
         "perl "
@@ -180,32 +224,25 @@ def eval_bleu_sents_tok(ref_file, pred_file):
         + "_tok"
     )
     os.system(cmd_string)
-    cmd_string = (
-        "perl "
-        + folder_data_before
-        + "/tokenizer.perl -threads 4 -no-escape < "
-        + ref_file
-        + " > "
-        + ref_file
-        + "_tok"
-    )
-    os.system(cmd_string)
+
     cmd_string = (
         "perl "
         + folder_data_before
         + "/multi-bleu.perl -lc "
-        + ref_file
+        + gold_file
         + "_tok"
         + " < "
         + pred_file
         + "_tok"
         + " > "
-        + pred_file.replace("txt", "bleu_tok")
+        + pred_file.replace("txt", "bleu_data")
     )
     os.system(cmd_string)
 
     try:
-        bleu_info_data = open(pred_file.replace("txt", "bleu_tok"), "r").readlines()[0].strip()
+        bleu_info_data = (
+            open(pred_file.replace("txt", "bleu_data"), "r").readlines()[0].strip()
+        )
     except:
         bleu_info_data = "no data"
 
@@ -213,9 +250,8 @@ def eval_bleu_sents_tok(ref_file, pred_file):
 
 
 def eval_meteor(ref_file, pred_file):
-
     dir_path = os.path.dirname(os.path.realpath(__file__))
-    folder_data_before = dir_path + "/../../utils"
+    folder_data_before = dir_path + "/../utils"
 
     cmd_string = (
         "java -jar "
@@ -236,9 +272,8 @@ def eval_meteor(ref_file, pred_file):
 
 
 def eval_chrf(ref_file, pred_file):
-
     dir_path = os.path.dirname(os.path.realpath(__file__))
-    folder_data_before = dir_path + "/../../utils"
+    folder_data_before = dir_path + "/../utils"
 
     cmd_string = (
         "python "
@@ -279,7 +314,7 @@ def label_smoothed_nll_loss(lprobs, target, epsilon, ignore_index=-100):
 
     # nll_loss = nll_loss.sum()                   # mean()? Scared to break other math.
     # smooth_loss = smooth_loss.sum()
-    nll_loss = nll_loss.mean()                   # mean()? Scared to break other math.
+    nll_loss = nll_loss.mean()  # mean()? Scared to break other math.
     smooth_loss = smooth_loss.mean()
     eps_i = epsilon / lprobs.size(-1)
     loss = (1.0 - epsilon) * nll_loss + eps_i * smooth_loss
@@ -334,7 +369,8 @@ def extract_rouge_mid_statistics(dct):
     for k1, v1 in dct.items():
         mid = v1.mid
         new_dict[k1] = {
-            stat: round(getattr(mid, stat), 4) for stat in ["precision", "recall", "fmeasure"]
+            stat: round(getattr(mid, stat), 4)
+            for stat in ["precision", "recall", "fmeasure"]
         }
     return new_dict
 
@@ -394,3 +430,118 @@ def calculate_smatch(test_path, predictions_path) -> dict:
     with Path(predictions_path).open() as p, Path(test_path).open() as g:
         score = next(smatch.score_amr_pairs(p, g))
     return {"smatch": score[2]}
+
+
+def smart_emb_init_sim(tokenizer, model):
+    print("Initializing AMR Vocab according to similar tokens ...")
+    INIT = "Ġ"
+
+    for tok, idx in tokenizer.added_tokens_encoder.items():
+        tok = tok.lstrip(INIT)
+
+        if tok.startswith("<pointer:") and tok.endswith(">"):
+            tok_split = ["pointer", str(tok.split(":")[1].strip(">"))]
+
+        elif tok.startswith("<"):
+            continue
+
+        elif tok.startswith(":"):
+            if tok.startswith(":op"):
+                tok_split = ["relation", "operator", str(int(tok[3:]))]
+
+            elif tok.startswith(":snt"):
+                tok_split = ["relation", "sentence", str(int(tok[4:]))]
+
+            elif tok.startswith(":ARG"):
+                tok_split = ["relation", "argument", str(int(tok[4:]))]
+
+            else:
+                tok_split = ["relation"] + tok.lstrip(":").split("-")
+
+        else:
+            tok_split = tok.split("-")
+
+        # print(f"dealing with {tok}...")
+        tok_split_ = tok_split
+        tok_split = []
+        for s in tok_split_:
+            s_ = INIT + s
+            if s_ in tokenizer.encoder:
+                # print(f"{s_} in tokenizer vocabulary")
+                tok_split.append(s_)
+            elif s in tokenizer.encoder:
+                # print(f"{s} in tokenizer vocabulary")
+                tok_split.append(s)
+            else:
+                # print(f"Further spliting {s} into {s.split('_')}")
+                tok_split.extend(s.split("_"))  #
+
+        vecs = []
+        for s in tok_split:
+            idx_split = tokenizer.encoder.get(s, -1)
+            if idx_split > -1:
+                vec_split = model.model.shared.weight.data[idx_split].clone()
+                vecs.append(vec_split)
+
+        if vecs:
+            vec = torch.stack(vecs, 0).mean(0)
+            noise = torch.empty_like(vec)
+            noise.uniform_(-0.1, +0.1)
+            model.model.shared.weight.data[idx] = vec + noise
+
+    return model
+
+
+def smart_emb_init(tokenizer, model):
+    print("Initializing AMR Vocab according to similar tokens ...")
+
+    for tok, idx in tokenizer.encoder.items():
+        tok = tok.lstrip(tokenizer.INIT)
+
+        if idx < tokenizer.old_enc_size:
+            continue
+
+        elif tok.startswith("<pointer:") and tok.endswith(">"):
+            tok_split = ["pointer", str(tok.split(":")[1].strip(">"))]
+
+        elif tok.startswith("<"):
+            continue
+
+        elif tok.startswith(":"):
+            if tok.startswith(":op"):
+                tok_split = ["relation", "operator", str(int(tok[3:]))]
+
+            elif tok.startswith(":snt"):
+                tok_split = ["relation", "sentence", str(int(tok[4:]))]
+
+            elif tok.startswith(":ARG"):
+                tok_split = ["relation", "argument", str(int(tok[4:]))]
+
+            else:
+                tok_split = ["relation"] + tok.lstrip(":").split("-")
+
+        else:
+            tok_split = tok.split("-")
+
+        tok_split_ = tok_split
+        tok_split = []
+        for s in tok_split_:
+            s_ = s + tokenizer.INIT
+            if s_ in tokenizer.encoder:
+                # print(f"{s_} in tokenizer vocabulary")
+                tok_split.append(s_)
+            else:
+                tok_split.extend(tokenizer._tok_bpe(s))  #
+
+        vecs = []
+        for s in tok_split:
+            idx_split = tokenizer.encoder.get(s, -1)
+            if idx_split > -1:
+                vec_split = model.model.shared.weight.data[idx_split].clone()
+                vecs.append(vec_split)
+
+        if vecs:
+            vec = torch.stack(vecs, 0).mean(0)
+            noise = torch.empty_like(vec)
+            noise.uniform_(-0.1, +0.1)
+            model.model.shared.weight.data[idx] = vec + noise

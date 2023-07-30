@@ -10,6 +10,8 @@ from allennlp.nn.util import batched_index_select
 import torch.nn.functional as F
 
 BertLayerNorm = torch.nn.LayerNorm
+
+
 class BertForRelation(BertPreTrainedModel):
     def __init__(self, config, num_rel_labels):
         super(BertForRelation, self).__init__(config)
@@ -20,11 +22,31 @@ class BertForRelation(BertPreTrainedModel):
         self.classifier = nn.Linear(config.hidden_size * 2, self.num_labels)
         self.init_weights()
 
-    def forward(self, input_ids, token_type_ids=None, attention_mask=None, labels=None, sub_idx=None, obj_idx=None, input_position=None):
-        outputs = self.bert(input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask, output_hidden_states=False, output_attentions=False, position_ids=input_position)
+    def forward(
+        self,
+        input_ids,
+        token_type_ids=None,
+        attention_mask=None,
+        labels=None,
+        sub_idx=None,
+        obj_idx=None,
+        input_position=None,
+    ):
+        outputs = self.bert(
+            input_ids,
+            token_type_ids=token_type_ids,
+            attention_mask=attention_mask,
+            output_hidden_states=False,
+            output_attentions=False,
+            position_ids=input_position,
+        )
         sequence_output = outputs[0]
-        sub_output = torch.cat([a[i].unsqueeze(0) for a, i in zip(sequence_output, sub_idx)])
-        obj_output = torch.cat([a[i].unsqueeze(0) for a, i in zip(sequence_output, obj_idx)])
+        sub_output = torch.cat(
+            [a[i].unsqueeze(0) for a, i in zip(sequence_output, sub_idx)]
+        )
+        obj_output = torch.cat(
+            [a[i].unsqueeze(0) for a, i in zip(sequence_output, obj_idx)]
+        )
         rep = torch.cat((sub_output, obj_output), dim=1)
         rep = self.layer_norm(rep)
         rep = self.dropout(rep)
@@ -36,6 +58,7 @@ class BertForRelation(BertPreTrainedModel):
             return loss
         else:
             return logits
+
 
 class AlbertForRelation(AlbertPreTrainedModel):
     def __init__(self, config, num_rel_labels):
@@ -47,11 +70,29 @@ class AlbertForRelation(AlbertPreTrainedModel):
         self.classifier = nn.Linear(config.hidden_size * 2, self.num_labels)
         self.init_weights()
 
-    def forward(self, input_ids, token_type_ids=None, attention_mask=None, labels=None, sub_idx=None, obj_idx=None):
-        outputs = self.albert(input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask, output_hidden_states=False, output_attentions=False)
+    def forward(
+        self,
+        input_ids,
+        token_type_ids=None,
+        attention_mask=None,
+        labels=None,
+        sub_idx=None,
+        obj_idx=None,
+    ):
+        outputs = self.albert(
+            input_ids,
+            token_type_ids=token_type_ids,
+            attention_mask=attention_mask,
+            output_hidden_states=False,
+            output_attentions=False,
+        )
         sequence_output = outputs[0]
-        sub_output = torch.cat([a[i].unsqueeze(0) for a, i in zip(sequence_output, sub_idx)])
-        obj_output = torch.cat([a[i].unsqueeze(0) for a, i in zip(sequence_output, obj_idx)])
+        sub_output = torch.cat(
+            [a[i].unsqueeze(0) for a, i in zip(sequence_output, sub_idx)]
+        )
+        obj_output = torch.cat(
+            [a[i].unsqueeze(0) for a, i in zip(sequence_output, obj_idx)]
+        )
         rep = torch.cat((sub_output, obj_output), dim=1)
         rep = self.layer_norm(rep)
         rep = self.dropout(rep)
@@ -64,6 +105,7 @@ class AlbertForRelation(AlbertPreTrainedModel):
         else:
             return logits
 
+
 class BertForRelationApprox(BertPreTrainedModel):
     def __init__(self, config, num_rel_labels):
         super(BertForRelationApprox, self).__init__(config)
@@ -74,12 +116,28 @@ class BertForRelationApprox(BertPreTrainedModel):
         self.classifier = nn.Linear(config.hidden_size * 2, self.num_labels)
         self.init_weights()
 
-    def forward(self, input_ids, token_type_ids=None, attention_mask=None, labels=None, sub_obj_ids=None, sub_obj_masks=None, input_position=None):
+    def forward(
+        self,
+        input_ids,
+        token_type_ids=None,
+        attention_mask=None,
+        labels=None,
+        sub_obj_ids=None,
+        sub_obj_masks=None,
+        input_position=None,
+    ):
         """
         attention_mask: [batch_size, from_seq_length, to_seq_length]
         """
         batch_size = input_ids.size(0)
-        outputs = self.bert(input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask, output_hidden_states=False, output_attentions=False, position_ids=input_position)
+        outputs = self.bert(
+            input_ids,
+            token_type_ids=token_type_ids,
+            attention_mask=attention_mask,
+            output_hidden_states=False,
+            output_attentions=False,
+            position_ids=input_position,
+        )
         sequence_output = outputs[0]
 
         sub_ids = sub_obj_ids[:, :, 0].view(batch_size, -1)
@@ -93,21 +151,25 @@ class BertForRelationApprox(BertPreTrainedModel):
 
         if labels is not None:
             loss_fct = CrossEntropyLoss()
-            active_loss = (sub_obj_masks.view(-1) == 1)
+            active_loss = sub_obj_masks.view(-1) == 1
             active_logits = logits.view(-1, logits.shape[-1])
             active_labels = torch.where(
-                    active_loss, labels.view(-1), torch.tensor(loss_fct.ignore_index).type_as(labels)
-                )
+                active_loss,
+                labels.view(-1),
+                torch.tensor(loss_fct.ignore_index).type_as(labels),
+            )
             loss = loss_fct(active_logits, active_labels)
             return loss
         else:
             return logits
 
+
 class AlbertForRelationApprox(BertPreTrainedModel):
     """
-    ALBERT approximation model is not supported by the current implementation, 
+    ALBERT approximation model is not supported by the current implementation,
     as Huggingface's Transformers ALBERT doesn't support an attention mask with a shape of [batch_size, from_seq_length, to_seq_length]."
     """
+
     def __init__(self, config, num_rel_labels):
         super(AlbertForRelationApprox, self).__init__(config)
         self.num_labels = num_rel_labels
@@ -117,9 +179,25 @@ class AlbertForRelationApprox(BertPreTrainedModel):
         self.classifier = nn.Linear(config.hidden_size * 2, self.num_labels)
         self.init_weights()
 
-    def forward(self, input_ids, token_type_ids=None, attention_mask=None, labels=None, sub_obj_ids=None, sub_obj_masks=None, input_position=None):
+    def forward(
+        self,
+        input_ids,
+        token_type_ids=None,
+        attention_mask=None,
+        labels=None,
+        sub_obj_ids=None,
+        sub_obj_masks=None,
+        input_position=None,
+    ):
         batch_size = input_ids.size(0)
-        outputs = self.albert(input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask, output_hidden_states=False, output_attentions=False, position_ids=input_position)
+        outputs = self.albert(
+            input_ids,
+            token_type_ids=token_type_ids,
+            attention_mask=attention_mask,
+            output_hidden_states=False,
+            output_attentions=False,
+            position_ids=input_position,
+        )
         sequence_output = outputs[0]
 
         sub_ids = sub_obj_ids[:, :, 0].view(batch_size, -1)
@@ -133,11 +211,13 @@ class AlbertForRelationApprox(BertPreTrainedModel):
 
         if labels is not None:
             loss_fct = CrossEntropyLoss()
-            active_loss = (sub_obj_masks.view(-1) == 1)
+            active_loss = sub_obj_masks.view(-1) == 1
             active_logits = logits.view(-1, logits.shape[-1])
             active_labels = torch.where(
-                    active_loss, labels.view(-1), torch.tensor(loss_fct.ignore_index).type_as(labels)
-                )
+                active_loss,
+                labels.view(-1),
+                torch.tensor(loss_fct.ignore_index).type_as(labels),
+            )
             loss = loss_fct(active_logits, active_labels)
             return loss
         else:

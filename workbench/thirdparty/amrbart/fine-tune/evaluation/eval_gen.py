@@ -7,11 +7,12 @@ import re
 
 
 def argument_parser():
-
     parser = argparse.ArgumentParser(description="Preprocess AMR data")
     # Multiple input parameters
     parser.add_argument("--in-tokens", help="input tokens", required=True, type=str)
-    parser.add_argument("--in-reference-tokens", help="refrence tokens to compute metric", type=str)
+    parser.add_argument(
+        "--in-reference-tokens", help="refrence tokens to compute metric", type=str
+    )
     args = parser.parse_args()
 
     return args
@@ -52,7 +53,7 @@ def raw_corpus_meteor(hypotheses: Iterable[str], references: Iterable[str]):
 def raw_corpus_bleurt(hypotheses: Iterable[str], references: Iterable[str]):
     hypotheses = [itm.strip() for itm in hypotheses]
     references = [itm.strip() for itm in references]
-    bleurt = datasets.load_metric("bleurt", 'bleurt-base-512')
+    bleurt = datasets.load_metric("bleurt", "bleurt-base-512")
     res = bleurt.compute(predictions=hypotheses, references=references)
     return res
 
@@ -64,7 +65,6 @@ def read_tokens(in_tokens_file):
 
 
 if __name__ == "__main__":
-
     # Argument handlig
     args = argument_parser()
 
@@ -90,9 +90,9 @@ if __name__ == "__main__":
     chrFpp = raw_corpus_chrf(hyp, ref)
     print("chrF++ {}".format(chrFpp))
 
-    #meteor = raw_corpus_meteor(hyp, ref)
-    #print("meteor {}".format(meteor))
+    # meteor = raw_corpus_meteor(hyp, ref)
+    # print("meteor {}".format(meteor))
 
-    #bleurt = raw_corpus_bleurt(hyp, ref)
-    #b_res = sum(bleurt["scores"]) / len(bleurt["scores"])
-    #print("bleurt {}".format(b_res))
+    # bleurt = raw_corpus_bleurt(hyp, ref)
+    # b_res = sum(bleurt["scores"]) / len(bleurt["scores"])
+    # print("bleurt {}".format(b_res))

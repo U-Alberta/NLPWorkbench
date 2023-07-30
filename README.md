@@ -1,12 +1,13 @@
 nlpworkbench
 ====
 
-**May 8: Our live demo (newskg.wdmuofa.ca) is currently unavailable. We will update when this gets resolved.**
+**July 30: Live demo is available at a link different from the one in the paper. Please contact the authors to get the link and credentials. Contact info is in the paper.**
 
 ## What-Is
 - [The purpose of this project](#about)
 - [The layout of this project](#layout)
 - [The call stack of an API call](#api-call-stack)
+- [The "best" practice when developing and debugging](/docs/dev-best-practices.md)
 ## How-To
 - [Deploy the whole thing on a single machine](#deployment)
 - [Add a new NLP tool](#extension)
@@ -19,7 +20,13 @@ nlpworkbench
 Please refer to our [paper](https://aclanthology.org/2023.eacl-demo.3/), [poster](docs/poster.pdf), [slides](docs/slides.pdf) or [video](https://vimeo.com/801006908).
 
 ### Changelog
-* May 8: We revamped the admin portal (`/admin`) to support collection creation, browsing, deletion and population. Documents can be imported into a collection from Bing search.
+#### Jul 30
+* The UI has a fresh new design. A new search bar is added for easier navigation. The admin portal is integrated with the main interface.
+* New feature: run inference using any huggingface model.
+* New documents can be imported from URL.
+* Updated model: AMRBART updated to -v2
+#### May 08
+* We revamped the admin portal (`/admin`) to support collection creation, browsing, deletion and population. Documents can be imported into a collection from Bing search.
 
 ## Deployment
 Docker is the preferred way of deployment.
@@ -239,7 +246,7 @@ workbench/
  |
  |-- __init__.py
  |-- rpc.py
- |-- snc/
+ |-- coll/
       |
       |-- __init__.py
  |-- thirdparty/

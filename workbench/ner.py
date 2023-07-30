@@ -1,5 +1,5 @@
 import json
-import os
+import logging
 from tempfile import NamedTemporaryFile
 from dataclasses import dataclass
 from typing import *
@@ -9,7 +9,7 @@ from .utils import Models, asdict, dynamic_import
 from .config import Config
 
 
-celery = create_celery("workbench.ner")
+celery = create_celery("workbench.ner", "ner")
 
 
 @dataclass
@@ -88,39 +88,78 @@ def extract_sentences(title: str, content: str) -> Tuple[List[str], List[str]]:
     paragraphs.extend(content.split("\n\n"))
     paragraphs = [x for x in paragraphs if not x.startswith("-- ")]  # drop metadata
     paragraphs = [x for x in paragraphs if x.strip()]
-    paragraphs = [x.replace("\n", " ") for x in paragraphs] # drop superfluous newlines
+    paragraphs = [x.replace("\n", " ") for x in paragraphs]  # drop superfluous newlines
 
     processed = []
     pos = []
     for paragraph in paragraphs:
         doc = Models.nlp(paragraph)
         for sent in doc.sents:
-            processed.append([x.text for x in sent if x.text.strip()])
-            pos.append([x.pos_ for x in sent if x.text.strip()])
+            tokens = [x.text for x in sent if x.text.strip()]
+            token_pos = [x.pos_ for x in sent if x.text.strip()]
+            if len(tokens) > 0:
+                processed.append(tokens)
+                pos.append(token_pos)
 
     return processed, pos
 
 
-@celery.task
-def run_ner(title, content) -> Paragraph:
-    sentences, token_pos = extract_sentences(title, content)
+def parse_raw_ner_output(sentences, token_pos, ner_output):
+    # convert to typed paragraph
+    n = 0
+    paragraph = []
+    for sent_idx in range(len(sentences)):
+        sent = []
+        tokens = sentences[sent_idx]
+        sent_ner = ner_output[sent_idx]
+        for i in range(len(sent_ner)):
+            sent_ner[i][0] -= n
+            sent_ner[i][1] -= n
+            # convert absolute index to relative index
+        prev_entity_end = -1
+        for ner_entity in sent_ner:
+            start, end, type = ner_entity
+            sent.extend(tokens[prev_entity_end + 1 : start])
 
-    run_ner = dynamic_import(Config.ner_script, Config.ner_script_entrypoint)
+            if all(
+                token_pos[sent_idx][i] == "PRON" for i in range(start, end + 1)
+            ) or all(token_pos[sent_idx][i] == "DET" for i in range(start, end + 1)):
+                # coreference. needs to be resolved
+                sent.append(Coreference(tokens[start : end + 1], type, None))
+            else:
+                proper = any(
+                    token_pos[sent_idx][i] == "PROPN" for i in range(start, end + 1)
+                )
+                sent.append(
+                    EntityMention(
+                        tokens[start : end + 1], sent_idx, len(sent), type, proper
+                    )
+                )
+            prev_entity_end = end
+        if not sent_ner:
+            sent.extend(tokens)
+        else:
+            sent.extend(tokens[sent_ner[-1][1] + 1 :])
+        paragraph.append(sent)
+        n += len(sentences[sent_idx])
+
+    return paragraph
+
+
+@celery.task
+def run_ner(sentences) -> Paragraph:
+    external_run_ner = dynamic_import(Config.ner_script, Config.ner_script_entrypoint)
 
     with NamedTemporaryFile("w") as pure_input_file, NamedTemporaryFile(
         "r"
     ) as pure_output_file:
-
         json.dump({"sentences": sentences, "doc_key": "placeholder"}, pure_input_file)
         pure_input_file.flush()
 
-        os.environ["CUDA_VISIBLE_DEVICES"] = ""  # disable GPU
         # run pure
         cmd_args = [
             "--model",
             "bert-base-uncased",
-            # "--model", "albert-xxlarge-v1",
-            # "--model_dir", "/data/ner/ent-alb-ctx100",
             "--model_dir",
             Config.ner_model,
             "--output_dir",
@@ -132,53 +171,11 @@ def run_ner(title, content) -> Paragraph:
             "--test_pred_filename",
             pure_output_file.name,
         ]
-        run_ner(cmd_args, Models)
-
-        # assert p.returncode == 0, p.returncode
+        external_run_ner(cmd_args, Models)
 
         # read output
         ner_output = json.load(pure_output_file)["predicted_ner"]
-        # convert to typed paragraph
-        n = 0
-        paragraph = []
-        for sent_idx in range(len(sentences)):
-            sent = []
-            tokens = sentences[sent_idx]
-            sent_ner = ner_output[sent_idx]
-            for i in range(len(sent_ner)):
-                sent_ner[i][0] -= n
-                sent_ner[i][1] -= n
-                # convert absolute index to relative index
-            prev_entity_end = -1
-            for ner_entity in sent_ner:
-                start, end, type = ner_entity
-                sent.extend(tokens[prev_entity_end + 1 : start])
-
-                if all(
-                    token_pos[sent_idx][i] == "PRON" for i in range(start, end + 1)
-                ) or all(
-                    token_pos[sent_idx][i] == "DET" for i in range(start, end + 1)
-                ):
-                    # coreference. needs to be resolved
-                    sent.append(Coreference(tokens[start : end + 1], type, None))
-                else:
-                    proper = any(
-                        token_pos[sent_idx][i] == "PROPN" for i in range(start, end + 1)
-                    )
-                    sent.append(
-                        EntityMention(
-                            tokens[start : end + 1], sent_idx, len(sent), type, proper
-                        )
-                    )
-                prev_entity_end = end
-            if not sent_ner:
-                sent.extend(tokens)
-            else:
-                sent.extend(tokens[sent_ner[-1][1] + 1 :])
-            paragraph.append(sent)
-            n += len(sentences[sent_idx])
-
-    return paragraph
+        return ner_output
 
 
 def is_subseq(a, b):
@@ -227,6 +224,22 @@ def resolve_coreferences(paragraph: Paragraph) -> Paragraph:
 if __name__ == "__main__":
     # must import torch before celery starts, otherwise torch.cuda.is_available() will always be False
     import torch
+
     print("cuda available?", torch.cuda.is_available())
 
-    celery.start(argv=["-A", "workbench.ner", "worker", "-l", "INFO", "--concurrency=1", "-Q", "ner", "-P", "solo", "-n", "ner-worker@%n"])
+    celery.start(
+        argv=[
+            "-A",
+            "workbench.ner",
+            "worker",
+            "-l",
+            "INFO",
+            "--concurrency=1",
+            "-Q",
+            "ner",
+            "-P",
+            "solo",
+            "-n",
+            "ner-worker@%n",
+        ]
+    )

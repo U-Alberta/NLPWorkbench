@@ -4,13 +4,16 @@ services:
   api:
     build:
       dockerfile: ./build/Dockerfile.api
+      target: ${COMPOSE_TARGET:-prod}
     environment:
-      - RPC_BROKER=${RPC_BROKER:-"redis://redis"}
-      - RPC_BACKEND=${RPC_BACKEND:-"redis://redis"}
+      - RPC_BROKER=${RPC_BROKER:-redis://redis}
+      - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
       - BING_KEY=${BING_KEY}
+      - API_WORKERS=${API_WORKERS:-1}
     profiles:
       - non-gpu
       - debug
+    restart: on-failure
     deploy:
       resources:
         limits:
@@ -22,13 +25,14 @@ services:
     build:
       context: ./frontend
       dockerfile: ./Dockerfile
+      target: ${COMPOSE_TARGET:-prod}
     depends_on:
       - api
       - neo4j
       - kibana
       - flower
     ports:
-      - "8085:80"
+      - "80:80"
     profiles:
       - non-gpu
       - debug
@@ -42,9 +46,11 @@ services:
   ner:
     build:
       dockerfile: ./build/Dockerfile.ner 
+      target: ${COMPOSE_TARGET:-prod}
     environment:
-      - RPC_BROKER=${RPC_BROKER:-"redis://redis"}
-      - RPC_BACKEND=${RPC_BACKEND:-"redis://redis"}
+      - RPC_BROKER=${RPC_BROKER:-redis://redis}
+      - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
+    restart: unless-stopped
     profiles:
       - gpu
     deploy:
@@ -61,16 +67,17 @@ services:
   linker:
     build:
       dockerfile: ./build/Dockerfile.linker
+    restart: unless-stopped
     depends_on:
       - redis
     environment:
-      - RPC_BROKER=${RPC_BROKER:-"redis://redis"}
-      - RPC_BACKEND=${RPC_BACKEND:-"redis://redis"}
+      - RPC_BROKER=${RPC_BROKER:-redis://redis}
+      - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
     profiles:
       - non-gpu
     volumes:
       - type: "bind"
-        source: /data/local/workbench-data/embeddings.sqlite3 # CHANGE THIS
+        source: /data/local/workbench-data/sqlite/data/embeddings.sqlite3 # CHANGE THIS
         target: /app/db/embeddings.sqlite3
     deploy:
       resources:
@@ -82,9 +89,11 @@ services:
   amr:
     build:
       dockerfile: ./build/Dockerfile.amr
+      target: ${COMPOSE_TARGET:-prod}
+    restart: unless-stopped
     environment:
-      - RPC_BROKER=${RPC_BROKER:-"redis://redis"}
-      - RPC_BACKEND=${RPC_BACKEND:-"redis://redis"}
+      - RPC_BROKER=${RPC_BROKER:-redis://redis}
+      - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
     profiles:
       - gpu
     deploy:
@@ -98,9 +107,11 @@ services:
   amr2text:
     build:
       dockerfile: ./build/Dockerfile.amr2text
+      target: ${COMPOSE_TARGET:-prod}
+    restart: unless-stopped
     environment:
-      - RPC_BROKER=${RPC_BROKER:-"redis://redis"}
-      - RPC_BACKEND=${RPC_BACKEND:-"redis://redis"}
+      - RPC_BROKER=${RPC_BROKER:-redis://redis}
+      - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
     profiles:
       - gpu
     deploy:
@@ -108,16 +119,17 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: ['0']
+              device_ids: ['1']
               capabilities: [gpu]
 
   vader:
     build:
       dockerfile: ./build/Dockerfile.vader
       target: ${COMPOSE_TARGET:-prod}
+    restart: unless-stopped
     environment:
-      - RPC_BROKER=${RPC_BROKER:-"redis://redis"}
-      - RPC_BACKEND=${RPC_BACKEND:-"redis://redis"}
+      - RPC_BROKER=${RPC_BROKER:-redis://redis}
+      - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
     profiles:
       - non-gpu
     deploy:
@@ -129,28 +141,50 @@ services:
 
   relation_extraction:
     build:
-      context: ./workbench/relation_extraction
+      dockerfile: ./build/Dockerfile.rel
+    restart: unless-stopped
     environment:
-      - RPC_BROKER=${RPC_BROKER:-"redis://redis"}
-      - RPC_BACKEND=${RPC_BACKEND:-"redis://redis"}
+      - RPC_BROKER=${RPC_BROKER:-redis://redis}
+      - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
     profiles:
-      - non-gpu
+      - gpu
       - debug
     deploy:
       resources:
-        limits:
-          memory: 16g
         reservations:
-          memory: 8g
+          devices:
+            - driver: nvidia
+              device_ids: ['1']
+              capabilities: [gpu]
+          memory: 1g
+        limits:
+          memory: 4g
+
+  classifier:
+    build:
+      dockerfile: ./build/Dockerfile.classifier
+      target: ${COMPOSE_TARGET:-prod}
+    restart: unless-stopped
+    environment:
+      - RPC_BROKER=${RPC_BROKER:-redis://redis}
+      - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
+    volumes:
+      - type: "bind"
+        source: /data/local/workbench-data/classifiers # CHANGE THIS
+        target: /app/models
+    profiles:
+      - non-gpu
+      - debug
 
   background:
     build:
       dockerfile: ./build/Dockerfile.background
+    restart: unless-stopped
     depends_on:
       - redis
     environment:
-      - RPC_BROKER=${RPC_BROKER:-"redis://redis"}
-      - RPC_BACKEND=${RPC_BACKEND:-"redis://redis"}
+      - RPC_BROKER=${RPC_BROKER:-redis://redis}
+      - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
     profiles:
       - non-gpu
     deploy:
@@ -162,7 +196,7 @@ services:
 
   flower:
     image: mher/flower:latest
-    command: celery --broker=${RPC_BROKER:-"redis://redis"} --result-backend=redis://redis${RPC_BROKER:-"redis://redis"} flower --url_prefix=flower
+    command: celery --broker=${RPC_BROKER:-redis://redis} --result-backend=redis://redis${RPC_BROKER:-redis://redis} flower --url_prefix=flower
     ports:
       - 5555 # unpublish port
     depends_on:
@@ -181,7 +215,7 @@ services:
     image: redis:7.0-alpine
     command: redis-server --save "" --appendonly no ${REDIS_AUTH}
     ports:
-      - 8081:6379
+      - 6379:6379
     profiles:
       - non-gpu
       - debug
@@ -196,7 +230,7 @@ services:
     build:
       context: ./neo4j
     ports:
-      - 9201:7687
+      - 7687:7687
       - 7474
     stop_grace_period: 2m
     profiles:
@@ -204,16 +238,17 @@ services:
       - debug
     volumes:
       - type: bind
-        source: /data/local/workbench-data/neo4j # CHANGE THIS
+        source: /data/local/workbench-data/neo4j/data # CHANGE THIS
         target: /data
       #- type: bind
       #  source: /home/ubuntu/workbench/docker-data/neo4j-certs # CHANGE THIS
       #  target: /var/lib/neo4j/certificates
     environment:
-      - NEO4J_dbms_connector_bolt_client__auth=OPTIONAL
+      - NEO4J_dbms_connector_bolt_client__auth=DISABLED
       - NEO4J_dbms_connector_bolt_listen__address=0.0.0.0:7687
+      - NEO4J_AUTH=neo4j/wdmuofa
       #- NEO4J_dbms_connector_bolt_advertised__address=newskg.wdmuofa.ca:9201
-      - NEO4J_dbms_connector_bolt_tls__level=OPTIONAL
+      - NEO4J_dbms_connector_bolt_tls__level=DISABLED
       #- NEO4J_dbms_ssl_policy_bolt_enabled=true
     deploy:
       resources:
@@ -223,11 +258,11 @@ services:
           memory: 8g
 
 
-  snc-neo4j:
+  coll-neo4j:
     build:
       context: ./neo4j
     environment:
-      - NEO4J_AUTH=neo4j/snc123
+      - NEO4J_AUTH=neo4j/coll123
       - NEO4J_dbms_security_procedures_unrestricted=gds.*,apoc.*
       - NEO4J_dbms_security_procedures_allowlist=gds.*,apoc.*
     profiles:
@@ -241,9 +276,11 @@ services:
         reservations:
           memory: 8g
 
-  snc:
+  coll:
     build:
-      dockerfile: ./build/Dockerfile.snc
+      dockerfile: ./build/Dockerfile.coll
+      target: ${COMPOSE_TARGET:-prod}
+    restart: unless-stopped
     profiles:
       - non-gpu
       - debug
@@ -254,7 +291,7 @@ services:
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
       - BING_KEY=${BING_KEY}
     depends_on:
-      - snc-neo4j
+      - coll-neo4j
       - redis
       - elasticsearch
     deploy:
@@ -266,6 +303,8 @@ services:
 
   elasticsearch:
     image: "elasticsearch:8.2.2"
+    ports:
+      - 9200 # unpublish port
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false # disable SSL
@@ -273,7 +312,7 @@ services:
       - xpack.security.transport.ssl.enabled=false # disable SSL
       - bootstrap.memory_lock=true # disable swap
       - logger.level=ERROR
-      #- path.repo=/repo # for restoring from backup
+      - path.repo=/repo # for restoring from backup
     mem_limit: "16g" # TODO: increase later
     ulimits:
       memlock:
@@ -283,8 +322,12 @@ services:
       - non-gpu
     volumes:
       - type: bind
-        source: /data/local/workbench-data/elasticsearch # CHANGE THIS
+        source: /data/local/workbench-data/es/data # CHANGE THIS
         target: /usr/share/elasticsearch/data
+      - type: bind
+        source: /data/local/workbench-data/es-bak # CHANGE THIS
+        target: /repo
+      
     deploy:
       resources:
         limits:

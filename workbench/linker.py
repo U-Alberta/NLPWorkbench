@@ -1,6 +1,7 @@
 from typing import *
 from dataclasses import dataclass
 import logging
+import sqlite3
 
 from .config import Config
 
@@ -11,6 +12,7 @@ try:
     neo4j = GraphDatabase.driver(Config.neo4j_url, auth=Config.neo4j_auth)
 except ImportError as e:
     import os
+
     if os.environ.get("RPC_CALLER") is None:
         raise e
 
@@ -18,7 +20,8 @@ from .ner import EntityMention
 from .utils import es_request, Models, asdict
 from .rpc import create_celery
 
-celery = create_celery("workbench.linker")
+celery = create_celery("workbench.linker", "linker")
+
 
 @dataclass
 class Candidate:
@@ -55,7 +58,8 @@ def query_es(name: str, mention_type: str) -> List[Dict]:
         "_source": False,
     }
     r = es_request("GET", f"/{Config.es_entity_collection}/_search", json=query).json()
-
+    if "hits" not in r or "hits" not in r["hits"]:
+        return []
     return r["hits"]["hits"]
 
 
@@ -81,10 +85,16 @@ def compute_entity_embedding(entityId: str):
     if desc:
         logging.info("Got entity description")
         emb = Models.encode_sentence(desc)
-        Models.get_embedding_db_conn().execute(
-            "INSERT INTO entity_embeddings (entity, embedding) VALUES (?, ?)",
-            (entityId, emb.tobytes()),
-        )
+        with Models.get_embedding_db_conn() as con:
+            try:
+                con.execute(
+                    "INSERT INTO entity_embeddings (entity, embedding) VALUES (?, ?)",
+                    (entityId, emb.tobytes()),
+                )
+            except sqlite3.IntegrityError:
+                # happens when two workers are inserting embeddings
+                # of the same entity at the same time. can be safely ignored.
+                pass
         logging.info("Entity embedding stored in db")
     else:
         emb = np.zeros(768)
@@ -92,13 +102,10 @@ def compute_entity_embedding(entityId: str):
 
 
 def get_entity_embedding(entity_id: str) -> np.ndarray:
-    emb = (
-        Models.get_embedding_db_conn()
-        .execute(
+    with Models.get_embedding_db_conn() as con:
+        emb = con.execute(
             "select embedding from entity_embeddings where entity = ?", (entity_id,)
-        )
-        .fetchone()
-    )
+        ).fetchone()
     if emb is None:
         emb = compute_entity_embedding(entity_id)
     else:
@@ -172,4 +179,18 @@ def run_linker(paragraph, mention) -> Optional[str]:
 
 
 if __name__ == "__main__":
-    celery.start(argv=["-A", "workbench.linker", "worker", "-l", "INFO", "-Q", "linker", "-n", "linker-worker@%n", "-c", "4"])
+    celery.start(
+        argv=[
+            "-A",
+            "workbench.linker",
+            "worker",
+            "-l",
+            "INFO",
+            "-Q",
+            "linker",
+            "-n",
+            "linker-worker@%n",
+            "-c",
+            "4",
+        ]
+    )

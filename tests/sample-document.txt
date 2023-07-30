@@ -1,3 +1,5 @@
+The CMA specified that Microsoft's proposals "did not sufficiently cover different cloud gaming service business models, including multigame subscription services" and are "not sufficiently open to providers who might wish to offer versions of games on PC operating systems other than Windows."
+
 Timeline: Google shutters Chinese site, moves to Hong Kong
 
 Following are some key developments in Google's bumpy foray into China: 
@@ -9,21 +11,3 @@ Following are some key developments in Google's bumpy foray into China:
 July 2005 - Google hires ex-Microsoft executive Lee Kai Fu as head of Google China. Microsoft sues Google over the move, claiming Lee will inevitably disclose propriety information to Google. The two rivals reach a settlement on the suit over Lee in December.
 
 Jan 2006 - Google rolls out Google.cn, its China-based search page that, in accordance with Chinese rules, censors search results. Google says it made the trade-off to "make meaningful and positive contributions" to development in China while abiding by the country's strict censorship laws.
-
-Aug 2008 - Google launches free music downloads for users in China to better compete with market leader Baidu Inc.
-
-March 2009 - China blocks access to Google's YouTube video site.
-
-June 2009 - A Chinese official accuses Google of spreading obscene content over the Internet. The comments come a day after Google.com, Gmail and other Google online services became inaccessible to many users in China.
-
-Sept 2009 - Lee resigns as Google China head to start his own company. Google appoints sales chief John Liu to take over Lee's business and operational responsibilities.
-
-Oct 2009 - A group of Chinese authors accuses Google of violating copyrights with its digital library, with many threatening to sue.
-
-Jan 2010 - Google announces it is no longer willing to censor searches in China and may pull out of the country.
-
-Jan 2010 - Google postpones launch of two Android phones in China.
-
-Feb 2010 - The New York Times reports the hacking attacks on Google had been traced to two schools in China, citing people familiar with the investigation. The schools deny involvement.
-
-March 22, 2010 - Google announces it will move its mainland Chinese-language portal and begin rerouting searches to its Hong Kong-based site.

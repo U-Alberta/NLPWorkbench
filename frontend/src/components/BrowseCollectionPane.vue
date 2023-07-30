@@ -24,8 +24,8 @@
   </el-form>
   <DocBrowsingTable
       v-if="finalQuery !== null && finalIndex !== null"
-      @errorMsg="(x) => $.emit('errorMsg', x)"
-      @successMsg="(x)=>$.emit('successMsg', x)"
+      @errorMsg="(x) => $emit('errorMsg', x)"
+      @successMsg="(x)=>$emit('successMsg', x)"
       :es-query="finalQuery"
       :index="finalIndex"
   />
@@ -54,7 +54,7 @@ export default {
   },
   mounted() {
     this.collectionListLoading = true
-    axios.get(`${this.api}/snc/indexes`).then((resp) => {
+    axios.get(`${this.api}/collection/`).then((resp) => {
       this.collections = resp.data
     }).catch((e) => {
       console.log(e)

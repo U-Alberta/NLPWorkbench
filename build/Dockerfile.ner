@@ -7,6 +7,7 @@ RUN mkdir /app/cache && mkdir /app/ner_log && mkdir /app/runs && mkdir /app/ligh
 COPY requirements/ner.txt requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
     conda run --no-capture-output pip3 install scipy && \
+    conda run --no-capture-output pip3 install -U pyopenssl && \
     conda run --no-capture-output pip3 install -r requirements.txt && \
     conda run --no-capture-output python3 -m spacy download en_core_web_sm
 RUN --mount=type=cache,target=/root/.cache/huggingface \
@@ -18,9 +19,9 @@ COPY workbench/ ./workbench
 FROM base AS test
 COPY .coveragerc ./
 RUN --mount=type=cache,target=/root/.cache/pip \ 
-    conda run --no-capture-output pip3 install pytest==7.2 coverage==7.0.5
+    conda run --no-capture-output pip3 install pytest==7.2.* coverage==7.0.*
 COPY tests ./tests
 CMD ["conda", "run", "--no-capture-output", "coverage", "run", "--data-file=cov/.coverage", "--source=workbench/", "--module", "pytest", "tests/test_ner.py"]
 
 FROM base AS prod
-CMD ["conda", "run", "--no-capture-output", "python3", "-m" "workbench.ner"]
+CMD ["conda", "run", "--no-capture-output", "python3", "-m", "workbench.ner"]

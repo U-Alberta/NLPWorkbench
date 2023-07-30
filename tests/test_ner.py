@@ -2,6 +2,7 @@ from pathlib import Path
 
 from workbench import ner
 
+
 def load_document():
     with open(Path(__file__).parent / "sample-document.txt", "r") as f:
         lines = f.readlines()
@@ -25,7 +26,9 @@ This is another sentence. This is another sentence."""
 
 def test_ner():
     title, content = load_document()
-    paragraph = ner.run_ner(title, content)
+    sentences, pos = ner.extract_sentences(title, content)
+    raw_ner_output = ner.run_ner(sentences)
+    paragraph = ner.parse_raw_ner_output(sentences, pos, raw_ner_output)
     # test if "Google" is recognized as an ORG
     google_recognized = False
     for sent in paragraph:

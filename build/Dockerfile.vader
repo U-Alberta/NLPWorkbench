@@ -10,7 +10,7 @@ ENV PYTHONUNBUFFERED=TRUE
 FROM base as test
 COPY .coveragerc ./
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip3 install pytest==7.2 coverage==7.0.5
+    pip3 install pytest==7.2.* coverage==7.0.*
 COPY tests ./tests
 CMD ["coverage", "run", "--data-file=cov/.coverage", "--source=workbench/", "--module", "pytest", "tests/test_sentiment.py"]
 

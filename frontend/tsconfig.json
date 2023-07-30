@@ -8,6 +8,7 @@
     "strict": true,
     "jsx": "preserve",
     "sourceMap": true,
+    "allowJs": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "lib": ["esnext", "dom"],
@@ -15,6 +16,9 @@
       "~/*": ["src/*"]
     },
     "skipLibCheck": true
+  },
+  "vueCompilerOptions": {
+    "target": 3
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue"]
 }

@@ -1,9 +1,9 @@
 version: "3"
-name: "nlp-workbench-dev"
+name: "nlp-workbench${PROJECT_NAME:-dev}"
 services:
   api:
     ports:
-      - "50050:50050"
+      - "${API_PORT:-50050}:50050"
     build:
       dockerfile: ./build/Dockerfile.api
       target: ${COMPOSE_TARGET:-prod}
@@ -11,6 +11,11 @@ services:
       - RPC_BROKER=${RPC_BROKER:-redis://redis}
       - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
       - BING_KEY=${BING_KEY}
+      - API_WORKERS=${API_WORKERS:-1}
+    depends_on:
+      - elasticsearch
+      - redis
+      - relation_extraction
     profiles:
       - non-gpu
       - debug
@@ -19,16 +24,16 @@ services:
     build:
       context: ./frontend
       dockerfile: ./Dockerfile
+      target: ${COMPOSE_TARGET:-prod}
     depends_on:
       - api
       - neo4j
       - kibana
       - flower
     ports:
-      - "8085:80"
+      - "${FRONTEND_PORT:-8081}:80"
     profiles:
       - non-gpu
-      - debug
 
   ner:
     build:
@@ -54,6 +59,7 @@ services:
   amr:
     build:
       dockerfile: ./build/Dockerfile.amr
+      target: ${COMPOSE_TARGET:-prod}
     environment:
       - RPC_BROKER=${RPC_BROKER:-redis://redis}
       - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
@@ -63,6 +69,7 @@ services:
   amr2text:
     build:
       dockerfile: ./build/Dockerfile.amr2text
+      target: ${COMPOSE_TARGET:-prod}
     environment:
       - RPC_BROKER=${RPC_BROKER:-redis://redis}
       - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
@@ -85,8 +92,12 @@ services:
     environment:
       - RPC_BROKER=${RPC_BROKER:-redis://redis}
       - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
+    depends_on:
+      - redis
+      - ner
     profiles:
       - non-gpu
+      - debug
 
   background:
     build:
@@ -99,6 +110,20 @@ services:
     profiles:
       - non-gpu
 
+  classifier:
+    build:
+      dockerfile: ./build/Dockerfile.classifier
+      target: ${COMPOSE_TARGET:-prod}
+    environment:
+      - RPC_BROKER=${RPC_BROKER:-redis://redis}
+      - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
+    volumes:
+      - type: "bind"
+        source: /data/local/workbench-data/classifiers # CHANGE THIS
+        target: /app/models
+    profiles:
+      - non-gpu
+
   flower:
     image: mher/flower:latest
     command: celery --broker=${RPC_BROKER:-redis://redis} --result-backend=redis://redis${RPC_BROKER:-redis://redis} flower --url_prefix=flower
@@ -108,13 +133,12 @@ services:
       - redis
     profiles:
       - non-gpu
-      - debug
 
   redis:
     image: redis:7.0-alpine
     command: redis-server --save "" --appendonly no ${REDIS_AUTH}
     ports:
-      - 8081:6379
+      - 6379 # no need to publish
     profiles:
       - non-gpu
       - debug
@@ -123,28 +147,26 @@ services:
     build:
       context: ./neo4j
     ports:
-      - 7687
-      - 7474
+      - 7687  # no need to publish
+      - 7474 # no need to publish
     stop_grace_period: 2m
     profiles:
       - non-gpu
-      - debug
 
-  snc-neo4j:
+  coll-neo4j:
     build:
       context: ./neo4j
     environment:
-      - NEO4J_AUTH=neo4j/snc123
+      - NEO4J_AUTH=neo4j/coll123
       - NEO4J_dbms_security_procedures_unrestricted=gds.*,apoc.*
       - NEO4J_dbms_security_procedures_allowlist=gds.*,apoc.*
-      - NEO4JLABS_PLUGINS=["apoc", "graph-data-science"]
     profiles:
       - non-gpu
     stop_grace_period: 2m
 
-  snc:
+  coll:
     build:
-      dockerfile: ./build/Dockerfile.snc
+      dockerfile: ./build/Dockerfile.coll
       target: ${COMPOSE_TARGET:-prod}
     profiles:
       - non-gpu
@@ -156,12 +178,14 @@ services:
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
       - BING_KEY=${BING_KEY}
     depends_on:
-      - snc-neo4j
+      - coll-neo4j
       - redis
       - elasticsearch
 
   elasticsearch:
     image: "elasticsearch:8.2.2"
+    ports:
+      - 9200
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false # disable SSL
@@ -170,7 +194,7 @@ services:
       - bootstrap.memory_lock=true # disable swap
       - logger.level=ERROR
       #- path.repo=/repo # for restoring from backup
-    mem_limit: "16g" # TODO: increase later
+    mem_limit: ${ES_MEM_LIMIT:-16g} # TODO: increase later
     ulimits:
       memlock:
         soft: -1
@@ -194,4 +218,3 @@ services:
       - elasticsearch
     profiles:
       - non-gpu
-      - debug
