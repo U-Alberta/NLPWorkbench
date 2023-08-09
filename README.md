@@ -12,6 +12,7 @@ nlpworkbench
 - [Deploy the whole thing on a single machine](#deployment)
 - [Add a new NLP tool](#extension)
 - [Write and run tests](#testing)
+- [Access NLP tools via HTTP](#http-api-access)
 - [Move some NLP tools to another machine](#distributed-deployment)
 - [Backup and restore the workbench](#restoring-from-backups)
 - [Cite this project](#cite)
@@ -57,6 +58,20 @@ Without further configurations some parts will not be working: the entity linker
 By default docker creates temporary volumes to store data. During production we want to persist things, and this is done by binding locations on the host to the containers. We also need to configure Neo4j and Kibana for pair with the servers. Details on deploying in production mode are documented [here](docs/deploy-production.md).
 
 The above commands will start all services. However, we may choose to only start the services of interest by editing the `profiles` sections of the services of interest in `docker-compose.yml`. For example, if only NER is required, we may add `- myprofile` under the `profiles` sections of `api`, `elasticsearch`, `redis`, and `ner`. These 4 services are the minimum required services to perform NER.
+
+## HTTP API access
+NLPWorkbench can be accessed procedurally via its HTTP APIs, i.e. managing documents, collections or performing analyses from scripts or other programs, without using the built-in web frontend. For example, you can make HTTP requests in Python:
+```python
+import requests
+
+collection_name = "new_collection"
+workbench_url = "http://localhost"
+r = requests.put(f"{workbench_url}/api/collection/{collection_name}")
+r.raise_for_status()
+```
+The above Python program creates a new collection called `new_collection`.
+
+Read the [HTTP API references](docs/http-api-doc.md) to learn about other APIs.
 
 ## Extension
 ![Architecture](docs/arch.svg)
@@ -104,6 +119,8 @@ tokens = tokenize.delay("hello world").get()
 ```
 
 That's it! Celery configured in `rpc.py` should work with any parameter / return data types, but it's encouraged to only use built-in types to avoid weird bugs. If you are not using this codebase, you can copy `rpc.py` to your repository. The only dependency to add is `dill==0.3.5` and `"celery[redis]"==5.2.7`.
+
+It's worth noting that every function in the project with `@celery.task` can be called this in fashion, even if they are in a different container.
 
 **If running individual containers**, you need to have redis running and configure the redis address in `config.py`.
 
