@@ -170,7 +170,7 @@ services:
       - RPC_BACKEND=${RPC_BACKEND:-redis://redis}
     volumes:
       - type: "bind"
-        source: /data/local/workbench-data/classifiers # CHANGE THIS
+        source: ${CLASSIFIER_FOLDER} # CHANGE THIS
         target: /app/models
     profiles:
       - non-gpu

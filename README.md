@@ -34,10 +34,13 @@ Requires a newer docker and docker compose plugin. Tested with docker v20.10.16.
 
 Credentials can be provided as environment variables:
 ``` bash
+export BING_KEY=AAAAAAAAAA # Bing search API key
 export BEARER_TOKEN=AAAAAAAAAAA # Twitter API bearer token
+export OPENAI_API_KEY=AAAAAAAAAA # OpenAI API key
 export ELASTIC_PASSWORD=elastic # Elasticsearch password, default is `elastic`
+export CLASSIFIER_FOLDER=/data/local/workbench-data/classifiers # where HuggingFace classifiers are stored
 ```
-They can also be stored in `.env`.
+They can also be stored in `.env`. API keys can also be provided in the frontend.
 
 Clone the repositories and build docker images:
 ```bash
@@ -47,11 +50,14 @@ docker compose -f docker-compose.dev.yml --profile non-gpu --profile gpu build
 docker compose -f docker-compose.dev.yml --profile non-gpu --profile gpu up
 ```
 
-The workbench should be up and running on `http://localhost:8085`. Paste a news link in the input box and click "Load News" to run some tests.
+The workbench should be up and running on `http://localhost`.
 
-Without further configurations some parts will not be working: Kibana needs to be paired with Elasticsearch. The entity linker will not work because the knowledge graph is empty. "Feelin' Lucky" also will not work because the article collection in ES is empty. But entity recognition, semantic parsing, and relation extraction should be working fine.
+Without further configurations some parts will not be working: the entity linker will not work because the knowledge graph is empty. Classifiers are not available except sentiment classier, until classifier models are put into `CLASSIFIER_FOLDER`.
 
 By default docker creates temporary volumes to store data. During production we want to persist things, and this is done by binding locations on the host to the containers. We also need to configure Neo4j and Kibana for pair with the servers. Details on deploying in production mode are documented [here](docs/deploy-production.md).
+
+The above commands will start all services. However, we may choose to only start the services of interest by editing the `profiles` sections of the services of interest in `docker-compose.yml`. For example, if only NER is required, we may add `- myprofile` under the `profiles` sections of `api`, `elasticsearch`, `redis`, and `ner`. These 4 services are the minimum required services to perform NER.
+
 ## Extension
 ![Architecture](docs/arch.svg)
 The architecture of the nlpworkbench is shown in the above figure. Each NLP tool / model runs in its independent container, and communicates with the API server using Celery, or alternatively any protocol you like.
